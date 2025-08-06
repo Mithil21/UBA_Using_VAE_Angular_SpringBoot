@@ -1,0 +1,68 @@
+{
+  "name": "uba-analytics-library",
+  "version": "1.0.0",
+  "description": "Universal User Behavior Analytics for Web Applications",
+  "main": "dist/uba-analytics.js",
+  "module": "dist/uba-analytics.esm.js",
+  "types": "dist/uba-analytics.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "user-behavior-analytics",
+    "uba",
+    "security",
+    "tracking",
+    "analytics",
+    "fraud-detection",
+    "angular",
+    "react",
+    "vue",
+    "vanilla-js"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/uba-analytics-library.git"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "rollup": "^3.0.0",
+    "rollup-plugin-typescript2": "^0.35.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@angular/core": ">=15.0.0",
+    "@angular/common": ">=15.0.0",
+    "react": ">=16.8.0",
+    "vue": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@angular/core": {
+      "optional": true
+    },
+    "@angular/common": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  }
+}
