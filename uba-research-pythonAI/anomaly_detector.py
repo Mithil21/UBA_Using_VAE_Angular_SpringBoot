@@ -15,12 +15,14 @@ class AnomalyDetector:
     
     def load_model(self):
         try:
-            # Determine input dimension from a sample
+            # Determine input dimension from a sample with new structure
             sample_features = self.feature_extractor.extract_features({
                 'keysPressed': [{'key': 'a', 'time': 123}],
                 'mouseClicks': [],
                 'mouseHovers': [],
                 'scrollEvents': [],
+                'pasteEvents': [],
+                'autofillDetected': [],
                 'timeSpent': 1000,
                 'screenResolution': '1920x1080'
             })
@@ -42,21 +44,30 @@ class AnomalyDetector:
             return {"error": "Model not loaded", "is_malicious": False, "confidence": 0.0}
         
         try:
+            # Handle nested payload structure
+            if 'metadata' in payload:
+                data_to_analyze = payload['metadata']
+            else:
+                data_to_analyze = payload
+            
             # Extract features from payload
-            features = self.feature_extractor.extract_features(payload)
+            features = self.feature_extractor.extract_features(data_to_analyze)
             
             # Get prediction and reconstruction error
             prediction = self.vae.predict(features)[0]
             reconstruction_error = self.vae.get_reconstruction_error(features)
             
             # Calculate confidence based on how far from threshold
-            confidence = min(abs(reconstruction_error - self.vae.threshold) / self.vae.threshold, 1.0)
+            if self.vae.threshold > 0:
+                confidence = min(abs(reconstruction_error - self.vae.threshold) / self.vae.threshold, 1.0)
+            else:
+                confidence = 0.5
             
             return {
                 "is_malicious": bool(prediction),
                 "confidence": float(confidence),
                 "reconstruction_error": float(reconstruction_error),
-                "threshold": float(self.vae.threshold)
+                "threshold": float(self.vae.threshold) if self.vae.threshold else 0.0
             }
             
         except Exception as e:
@@ -90,7 +101,10 @@ def main():
         result = detector.detect_anomaly(payload)
         
         # Return simple boolean for Spring
-        print("true" if result.get("is_malicious", False) else "false")
+        if result.get("error"):
+            print("false")  # Default to safe on error
+        else:
+            print("true" if result.get("is_malicious", False) else "false")
         
     except json.JSONDecodeError:
         print("false")  # Default to safe
