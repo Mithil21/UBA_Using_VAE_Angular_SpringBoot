@@ -50,4 +50,9 @@ public class User {
     public void setPassword(String password) {
         this.password = password;
     }
+
+    // List<Role> getRoles() {
+    //     // Placeholder for actual role retrieval logic
+    //     return List.of("USER"); // Example role
+    // }
 }
