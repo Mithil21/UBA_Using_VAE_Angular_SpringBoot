@@ -1,14 +1,57 @@
 package com.example.uba_research.service;
 
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.Map;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+
 
 @Service
 public class PythonAnalysisService {
+
+    private final RestTemplate restTemplate;
+    private final String analysisUrl;
+
+    public PythonAnalysisService(@Value("${python.analysis.url:http://localhost:5000/analyze}") String analysisUrl) {
+        this.restTemplate = new RestTemplate();
+        this.analysisUrl = analysisUrl;
+    }
+
+
+    /**
+     * Sends body and metadata to the configured Python analysis endpoint.
+     * Expects the service to return a plain string like "Threat" or "Safe".
+     */
+    public String analyze(String body, String metadata) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> payload = Map.of(
+                    "body", body != null ? body : "",
+                    "metadata", metadata != null ? metadata : ""
+            );
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(analysisUrl, request, String.class);
+            String verdict = response.getBody();
+            return verdict != null ? verdict.trim() : "Safe";
+        } catch (Exception e) {
+            System.err.println("PythonAnalysisService error: " + e.getMessage());
+            return "Safe";
+        }
+    }
 
     public boolean detectMalware(Map<String, Object> indicators) {
         try {
