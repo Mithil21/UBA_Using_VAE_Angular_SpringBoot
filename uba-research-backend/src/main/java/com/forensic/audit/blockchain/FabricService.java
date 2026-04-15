@@ -3,6 +3,8 @@ package com.forensic.audit.blockchain;
 import lombok.extern.slf4j.Slf4j;
 import org.hyperledger.fabric.client.*;
 import org.hyperledger.fabric.client.identity.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -50,6 +52,8 @@ public class FabricService {
 
     private ManagedChannel grpcChannel;
     private Gateway gateway;
+
+    private static Logger log = LoggerFactory.getLogger(FabricService.class);
 
     @PostConstruct
     public void connect() {

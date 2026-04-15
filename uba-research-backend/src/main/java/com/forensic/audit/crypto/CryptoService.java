@@ -2,6 +2,8 @@ package com.forensic.audit.crypto;
 
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -15,6 +17,8 @@ import java.util.Base64;
 @Slf4j
 @Service
 public class CryptoService {
+
+    private static Logger log = LoggerFactory.getLogger(CryptoService.class);
 
     static {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
