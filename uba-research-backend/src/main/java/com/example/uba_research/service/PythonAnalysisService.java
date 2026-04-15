@@ -23,7 +23,7 @@ public class PythonAnalysisService {
     private final RestTemplate restTemplate;
     private final String analysisUrl;
 
-    public PythonAnalysisService(@Value("${python.analysis.url:http://localhost:5000/analyze}") String analysisUrl) {
+    public PythonAnalysisService(@Value("${python.analysis.url:http://localhost:5000/detect}") String analysisUrl) {
         this.restTemplate = new RestTemplate();
         this.analysisUrl = analysisUrl;
     }
@@ -40,13 +40,22 @@ public class PythonAnalysisService {
 
             Map<String, Object> payload = Map.of(
                     "body", body != null ? body : "",
-                    "metadata", metadata != null ? metadata : ""
+                    "metadata", metadata != null ? metadata : "{}"
             );
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(analysisUrl, request, String.class);
-            String verdict = response.getBody();
-            return verdict != null ? verdict.trim() : "Safe";
+            
+            // Parse JSON response to extract is_malicious field
+            String responseBody = response.getBody();
+            if (responseBody != null && responseBody.contains("is_malicious")) {
+                // Simple JSON parsing for boolean value
+                boolean isMalicious = responseBody.contains("\"is_malicious\":true") || 
+                                    responseBody.contains("\"is_malicious\": true");
+                return isMalicious ? "Threat" : "Safe";
+            }
+            
+            return "Safe";
         } catch (Exception e) {
             System.err.println("PythonAnalysisService error: " + e.getMessage());
             return "Safe";

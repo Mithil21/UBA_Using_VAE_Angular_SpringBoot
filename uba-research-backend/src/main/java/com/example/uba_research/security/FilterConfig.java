@@ -15,4 +15,13 @@ public class FilterConfig {
         registration.setOrder(0);
         return registration;
     }
+    
+    @Bean
+    public FilterRegistrationBean<StealthHeaderFilter> stealthHeaderFilterRegistration() {
+        FilterRegistrationBean<StealthHeaderFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new StealthHeaderFilter());
+        registration.addUrlPatterns("/*");
+        registration.setOrder(1);
+        return registration;
+    }
 }

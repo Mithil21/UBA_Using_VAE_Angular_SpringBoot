@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 @CrossOrigin(origins = "http://localhost:4200")
 public class AuthController {
 
@@ -27,7 +27,7 @@ public class AuthController {
 
     @PostMapping("/login")
     @CrossOrigin(origins = "http://localhost:4200",allowedHeaders = "*",allowCredentials = "true")
-    public ResponseEntity<Object> login(@RequestBody Request<LoginDto> request) {
+    public ResponseEntity<Response<Object>> login(@RequestBody Request<LoginDto> request) {
         LoginDto loginDto = request.getPayload();
         
         // Simulate user validation and role assignment
@@ -41,7 +41,16 @@ public class AuthController {
             "message", "Login successful"
         );
         
-        Response<Object> response = new Response<>("Login successful", (String) responseData, true);
+        Response<Object> response = new Response<>("Login successful", responseData, true);
         return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/health")
+    public ResponseEntity<Object> health() {
+        return ResponseEntity.ok(java.util.Map.of(
+            "status", "healthy",
+            "timestamp", java.time.Instant.now().toString(),
+            "service", "UBA Research Backend"
+        ));
     }
 }

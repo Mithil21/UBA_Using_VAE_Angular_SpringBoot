@@ -1,32 +1,92 @@
-import requests
-from bs4 import BeautifulSoup
+import sys
 
-def print_unicode_grid(doc_url):
-    response = requests.get(doc_url)
-    response.raise_for_status()
-    html = response.text
+# Increase recursion depth just in case N is large, 
+# though standard 1000 is usually enough for N=100
+sys.setrecursionlimit(2000)
 
-    soup = BeautifulSoup(html, 'html.parser')
-    cells = soup.find_all('td')
+def calculate_metric(numbers, index, current_sum):
+    """
+    Recursively calculates the sum based on the rules.
+    """
+    # Base case: we have processed all numbers
+    if index == len(numbers):
+        return current_sum
+    
+    val = int(numbers[index])
+    
+    # RULE IMPLEMENTATION: 
+    # "Calculate the power of four of Yn, excluding when Yn is positive"
+    # This means we only calculate if Yn <= 0.
+    if val <= 0:
+        # If the problem actually asks for sum of squares, change `** 4` to `** 2`
+        # and remove the `if val <= 0` check if it requires all numbers.
+        term = val ** 4
+        current_sum = current_sum + term
+        
+    return calculate_metric(numbers, index + 1, current_sum)
 
-    # Skip header row
-    data = []
-    for i in range(3, len(cells), 3):  # start from index 3 to skip headers
-        x = int(cells[i].get_text(strip=True))
-        char = cells[i+1].get_text(strip=True)
-        y = int(cells[i+2].get_text(strip=True))
-        data.append((x, y, char))
+def solve_test_case(current_case, total_cases, results):
+    """
+    Recursively processes each test case.
+    """
+    # Base case: we have processed all test cases
+    if current_case == total_cases:
+        return results
 
-    max_x = max(d[0] for d in data)
-    max_y = max(d[1] for d in data)
+    # Read X (Expected count)
+    line_x = sys.stdin.readline()
+    if not line_x:
+        return results
+    
+    try:
+        x = int(line_x.strip())
+    except ValueError:
+        x = 0
 
-    grid = [[' ' for _ in range(max_x + 1)] for _ in range(max_y + 1)]
+    # Read Y (The list of integers)
+    line_y = sys.stdin.readline()
+    if not line_y:
+        y_list = []
+    else:
+        # split() is allowed (it's a string method, not a comprehension)
+        y_list = line_y.strip().split()
 
-    for x, y, char in data:
-        grid[y][x] = char
+    # VALIDATION: Check if number of integers matches X
+    if len(y_list) != x:
+        results.append(-1)
+    else:
+        # Calculate recursively
+        answ = calculate_metric(y_list, 0, 0)
+        results.append(answ)
 
-    for row in grid:
-        print(''.join(row))
+    return solve_test_case(current_case + 1, total_cases, results)
 
+def print_results(results, index):
+    """
+    Recursively prints the results to standard output.
+    """
+    if index == len(results):
+        return
+    
+    print(results[index])
+    print_results(results, index + 1)
 
-print_unicode_grid('https://docs.google.com/document/d/e/2PACX-1vRPzbNQcx5UriHSbZ-9vmsTow_R6RRe7eyAU60xIF9Dlz-vaHiHNO2TKgDi7jy4ZpTpNqM7EvEcfr_p/pub')
+def main():
+    # Read Number of Test Cases (N)
+    line = sys.stdin.readline()
+    if not line:
+        return
+        
+    try:
+        n = int(line.strip())
+    except ValueError:
+        return
+
+    # Solve and store results
+    final_results = solve_test_case(0, n, [])
+    
+    # Print all results at the end
+    print_results(final_results, 0)
+
+if __name__ == "__main__":
+    main()

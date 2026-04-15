@@ -25,23 +25,37 @@ public class StealthHeaderFilter extends OncePerRequestFilter {
         String traceId = request.getHeader("X-Trace-ID");
 
         if (requestId != null && sessionToken != null && clientVersion != null && traceId != null) {
+            // Try to reconstruct the original encrypted metadata
             String encryptedMetadata = requestId + sessionToken + clientVersion + traceId;
-            String decryptedMetadata = decryptMetadata(encryptedMetadata);
-            request.setAttribute("DECODED_METADATA", decryptedMetadata);
+            try {
+                String decryptedMetadata = decryptMetadata(encryptedMetadata);
+                request.setAttribute("DECODED_METADATA", decryptedMetadata);
+            } catch (Exception e) {
+                // Set empty metadata if decryption fails
+                request.setAttribute("DECODED_METADATA", "{}");
+            }
+        } else {
+            // Set empty metadata if headers are missing
+            request.setAttribute("DECODED_METADATA", "{}");
         }
 
         filterChain.doFilter(request, response);
     }
 
     private String decryptMetadata(String encrypted) {
-        byte[] decodedBytes = Base64.getDecoder().decode(encrypted);
-        String decodedString = new String(decodedBytes);
-        StringBuilder result = new StringBuilder();
+        try {
+            byte[] decodedBytes = Base64.getDecoder().decode(encrypted);
+            String decodedString = new String(decodedBytes);
+            StringBuilder result = new StringBuilder();
 
-        for (int i = 0; i < decodedString.length(); i++) {
-            result.append((char) (decodedString.charAt(i) ^ MASTER_KEY.charAt(i % MASTER_KEY.length())));
+            for (int i = 0; i < decodedString.length(); i++) {
+                result.append((char) (decodedString.charAt(i) ^ MASTER_KEY.charAt(i % MASTER_KEY.length())));
+            }
+
+            return result.toString();
+        } catch (Exception e) {
+            // Return empty JSON if decryption fails
+            return "{}";
         }
-
-        return result.toString();
     }
 }

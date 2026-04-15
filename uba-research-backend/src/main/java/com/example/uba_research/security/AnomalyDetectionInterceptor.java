@@ -23,12 +23,16 @@ public class AnomalyDetectionInterceptor implements HandlerInterceptor {
     }
 
     @Override
-    @Valid
     public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler) throws Exception {
         String metadata = (String) request.getAttribute("DECODED_METADATA");
-        byte[] bodyBytes = request.getInputStream().readAllBytes();
-        String charset = request.getCharacterEncoding() != null ? request.getCharacterEncoding() : StandardCharsets.UTF_8.name();
-        String body = new String(bodyBytes, charset);
+        
+        // Use cached body if available, otherwise read from stream
+        String body = "";
+        if (request instanceof CachedBodyHttpServletRequest cachedRequest) {
+            byte[] bodyBytes = cachedRequest.getCachedBody();
+            String charset = request.getCharacterEncoding() != null ? request.getCharacterEncoding() : StandardCharsets.UTF_8.name();
+            body = new String(bodyBytes, charset);
+        }
 
         System.out.println("Decoded metadata: " + metadata);
         System.out.println("Request body: " + body);
