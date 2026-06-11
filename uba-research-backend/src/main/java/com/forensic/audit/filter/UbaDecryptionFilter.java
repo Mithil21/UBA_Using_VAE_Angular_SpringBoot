@@ -74,6 +74,7 @@ package com.forensic.audit.filter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.forensic.audit.crypto.CryptoService;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
@@ -136,7 +137,14 @@ public class UbaDecryptionFilter extends OncePerRequestFilter {
                 System.out.println(decryptedJson);
                 System.out.println("====================================\n");
 
-                wrappedRequest.setAttribute("ubaTelemetry", decryptedJson);
+                // Rename ubaTelemetry -> metadata and copy payload into it for Python analysis
+                ObjectNode decryptedNode = (ObjectNode) objectMapper.readTree(decryptedJson);
+                if (decryptedNode.has("ubaTelemetry")) {
+                    ObjectNode metadataNode = (ObjectNode) decryptedNode.remove("ubaTelemetry");
+                    metadataNode.set("payload", decryptedNode.get("payload"));
+                    decryptedNode.set("metadata", metadataNode);
+                }
+                wrappedRequest.setBody(objectMapper.writeValueAsBytes(decryptedNode));
             } else {
                 log.warn("[UBA Filter] Missing encrypted metadata fields; skipping decryption.");
             }
@@ -151,7 +159,7 @@ public class UbaDecryptionFilter extends OncePerRequestFilter {
 
     // --- INNER CLASS: Custom Wrapper to prevent stream draining ---
     private static class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
-        private final byte[] cachedBody;
+        private byte[] cachedBody;
 
         public CachedBodyHttpServletRequest(HttpServletRequest request) throws IOException {
             super(request);
@@ -160,6 +168,10 @@ public class UbaDecryptionFilter extends OncePerRequestFilter {
 
         public byte[] getCachedBody() {
             return this.cachedBody;
+        }
+
+        public void setBody(byte[] body) {
+            this.cachedBody = body;
         }
 
         @Override

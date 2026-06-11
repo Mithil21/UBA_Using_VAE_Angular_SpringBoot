@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
 import java.util.Base64;
 
-@Slf4j
+
 @Service
 public class CryptoService {
 

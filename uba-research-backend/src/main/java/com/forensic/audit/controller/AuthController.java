@@ -1,5 +1,6 @@
 package com.forensic.audit.controller;
 
+import com.forensic.audit.commons.Payload;
 import com.forensic.audit.user.User;
 import com.forensic.audit.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*")
 public class AuthController {
 
 
@@ -17,11 +19,11 @@ public class AuthController {
     private UserRepository userRepository;
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@RequestBody User user) {
-        if (userRepository.existsByEmail(user.getEmail())) {
+    public ResponseEntity<String> register(@RequestBody Payload<User> payload) {
+        if (userRepository.existsByEmail(payload.getPayload().getEmail())) {
             return ResponseEntity.badRequest().body("Email already exists");
         }
-        userRepository.save(user);
+        userRepository.save(payload.getPayload());
         return ResponseEntity.ok("User registered successfully");
     }
 
