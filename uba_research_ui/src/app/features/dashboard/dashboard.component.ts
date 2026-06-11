@@ -106,6 +106,16 @@ import { SessionStore, LoginSnapshot } from '../../core/services/session-store.s
             <div class="stat-card__label">Encryption used</div>
           </div>
         </div>
+
+        <div class="stat-card">
+          <div class="stat-card__icon red">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          </div>
+          <div class="stat-card__body">
+            <div class="stat-card__val">{{ snap.telemetry.clipboardAttempts.length }}</div>
+            <div class="stat-card__label">Clipboard attempts</div>
+          </div>
+        </div>
       </section>
 
       <!-- ── Timeline ── -->
@@ -230,6 +240,30 @@ import { SessionStore, LoginSnapshot } from '../../core/services/session-store.s
         </div>
       </section>
 
+      <!-- ── Clipboard attempts ── -->
+      <section class="panel">
+        <h2 class="panel__title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          Clipboard Attempts
+          <span class="badge-count" [style.background]="snap.telemetry.clipboardAttempts.length ? 'rgba(248,113,113,0.15)' : ''" [style.color]="snap.telemetry.clipboardAttempts.length ? '#f87171' : ''">{{ snap.telemetry.clipboardAttempts.length }}</span>
+        </h2>
+        <div class="scroll-table">
+          <table>
+            <thead><tr><th>Type</th><th>Target</th><th>Attempted Text</th><th>Status</th><th>Time</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let c of snap.telemetry.clipboardAttempts">
+                <td><span class="pill" [class]="c.type === 'copy' ? 'pill--amber' : 'pill--purple'">{{ c.type }}</span></td>
+                <td class="muted">{{ c.target }}</td>
+                <td><code>{{ c.attemptedText || '(empty)' }}</code></td>
+                <td><span class="pill pill--red">blocked</span></td>
+                <td class="muted">{{ c.timestamp | date:'HH:mm:ss.SSS' }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="empty" *ngIf="!snap.telemetry.clipboardAttempts.length">No clipboard attempts recorded</div>
+        </div>
+      </section>
+
       <!-- ── Footer ── -->
       <footer class="dash-footer">
         <span>IP: <strong>{{ snap.telemetry.ipAddress || '—' }}</strong></span>
@@ -284,6 +318,7 @@ import { SessionStore, LoginSnapshot } from '../../core/services/session-store.s
     .pill--purple { background:rgba(129,140,248,0.12); color:#818cf8; border:1px solid rgba(129,140,248,0.25); }
     .pill--blue   { background:rgba(99,102,241,0.12); color:#a5b4fc; border:1px solid rgba(99,102,241,0.25); }
     .pill--amber  { background:rgba(251,191,36,0.12); color:#fbbf24; border:1px solid rgba(251,191,36,0.25); }
+    .pill--red    { background:rgba(248,113,113,0.12); color:#f87171; border:1px solid rgba(248,113,113,0.25); }
 
     /* ── Hero ── */
     .hero { position:relative; overflow:hidden; padding:48px 32px 40px; margin-bottom:0; }

@@ -29,6 +29,8 @@ html, body {
   background: var(--bg-base);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ── Animated mesh background ── */
@@ -201,6 +203,8 @@ body::after {
   outline: none;
   transition: var(--transition);
   caret-color: var(--accent);
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .field input::placeholder { color: transparent; }
