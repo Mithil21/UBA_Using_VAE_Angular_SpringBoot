@@ -163,6 +163,8 @@ export class RegisterComponent {
       setTimeout(() => this.router.navigate(['/login']), 1500);
     } catch (err: unknown) {
       const httpErr = err as { error?: string; status?: number; message?: string };
+      this.form = { username: '', email: '', password: '' };
+      this.strength = 0;
       this.notify.error(httpErr.error ?? httpErr.message ?? 'Registration failed.');
     } finally {
       this.loading = false;

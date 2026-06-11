@@ -44,16 +44,16 @@ import { NotificationService } from '../../../core/services/notification.service
 
           <div class="field">
             <input
-              id="username"
-              data-uba="login-username"
-              type="text"
-              placeholder="Username"
-              [(ngModel)]="form.username"
-              name="username"
+              id="email"
+              data-uba="login-email"
+              type="email"
+              placeholder="Email"
+              [(ngModel)]="form.email"
+              name="email"
               autocomplete="off"
               required
             />
-            <label for="username">Username</label>
+            <label for="email">Email</label>
           </div>
 
           <div class="field">
@@ -115,7 +115,7 @@ import { NotificationService } from '../../../core/services/notification.service
   `,
 })
 export class LoginComponent {
-  form = { username: '', password: '' };
+  form = { email: '', password: '' };
   loading = false;
   showPassword = false;
 
@@ -137,6 +137,7 @@ export class LoginComponent {
       setTimeout(() => this.router.navigate(['/dashboard']), 1500);
     } catch (err: unknown) {
       const httpErr = err as { error?: string; status?: number; message?: string };
+      this.form = { email: '', password: '' };
       this.notify.error(httpErr.error ?? httpErr.message ?? 'Login failed.');
     } finally {
       this.loading = false;

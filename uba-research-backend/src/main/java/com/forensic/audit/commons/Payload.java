@@ -9,8 +9,6 @@ import lombok.NonNull;
 public class Payload <T>{
     @NonNull
     private T payload;
-    @NonNull
     private SecurityContext securityContext;
-    @NonNull
     private Metadata<T> metadata;
 }

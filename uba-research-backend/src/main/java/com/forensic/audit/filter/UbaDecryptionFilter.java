@@ -151,6 +151,10 @@ public class UbaDecryptionFilter extends OncePerRequestFilter {
 
         } catch (Exception e) {
             log.error("[UBA Filter] Decryption failed: {}", e.getMessage());
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"error\":\"Decryption failed. Please refresh and retry.\"}");
+            return;
         }
 
         // 3. Pass the wrapped request down the chain so AuthController can still read it

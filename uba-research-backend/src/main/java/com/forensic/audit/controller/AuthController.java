@@ -1,5 +1,6 @@
 package com.forensic.audit.controller;
 
+import com.forensic.audit.analysis.VAEAnalysis;
 import com.forensic.audit.commons.Payload;
 import com.forensic.audit.user.User;
 import com.forensic.audit.user.repository.UserRepository;
@@ -15,11 +16,19 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
 
-    @Autowired
-    private UserRepository userRepository;
+//    @Autowired
+    private final UserRepository userRepository;
+    private final VAEAnalysis vaeAnalysis;
 
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody Payload<User> payload) {
+
+        VAEAnalysis.AnomalyResult analysis = vaeAnalysis.analyze(payload.getMetadata());
+        System.out.printf("[VAE] error=%.6f probability=%.4f accepted=%b%n",
+                analysis.reconstructionError(), analysis.normalProbability(), analysis.accepted());
+        if (!analysis.accepted()) {
+            return ResponseEntity.status(403).body("Behavioural analysis rejected this request");
+        }
         if (userRepository.existsByEmail(payload.getPayload().getEmail())) {
             return ResponseEntity.badRequest().body("Email already exists");
         }

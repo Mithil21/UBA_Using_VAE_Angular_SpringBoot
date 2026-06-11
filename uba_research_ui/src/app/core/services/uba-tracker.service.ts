@@ -41,9 +41,37 @@ export interface UbaTelemetry {
   sessionId: string;
   ipAddress: string;
   location: string;
+
+  // Page behaviour
   pageDwellTime: number;
   tabSwitchCount: number;
   windowBlurCount: number;
+
+  // Keystroke analytics
+  keystrokeCount: number;
+  avgKeyHoldTime: number;
+  avgFlightTime: number;
+  stdFlightTime: number;
+  typingSpeed: number;
+  backspaceCount: number;
+  specialKeyCount: number;
+
+  // Mouse analytics
+  mouseEventCount: number;
+  mouseDistance: number;
+  avgMouseSpeed: number;
+  maxMouseSpeed: number;
+  clickCount: number;
+  clickFrequency: number;
+
+  // Form / navigation analytics
+  navigationCount: number;
+  timeBeforeFirstInput: number;
+  formCompletionTime: number;
+  fieldSwitchCount: number;
+  idleTimeRatio: number;
+
+  // Raw events
   keystrokes: KeystrokeEvent[];
   mouseEvents: MouseEvent_[];
   clicks: ClickEvent[];
@@ -63,10 +91,17 @@ export class UbaTrackerService implements OnDestroy {
   private tabSwitchCount    = 0;
   private windowBlurCount   = 0;
   private pageEntryTime     = Date.now();
+  private firstInputTime    = 0;
+  private lastFieldTarget   = '';
+  private fieldSwitchCount  = 0;
+  private lastActivityTime  = 0;
+  private totalIdleMs       = 0;
   private ipAddress         = '';
   private location          = '';
   private moveThrottle      = 0;
   private overThrottle      = 0;
+
+  private static readonly IDLE_THRESHOLD_MS = 2000;
 
   private boundKeydown       = this.onKeydown.bind(this);
   private boundKeyup         = this.onKeyup.bind(this);
@@ -182,11 +217,23 @@ export class UbaTrackerService implements OnDestroy {
 
   // ── Keyboard ──────────────────────────────────────────────────────────────
 
+  private recordActivity(): void {
+    const now = Date.now();
+    if (this.lastActivityTime && now - this.lastActivityTime > UbaTrackerService.IDLE_THRESHOLD_MS)
+      this.totalIdleMs += now - this.lastActivityTime;
+    this.lastActivityTime = now;
+  }
+
   private onKeydown(event: KeyboardEvent): void {
+    const target = this.resolveTarget(event);
+    if (!this.firstInputTime) this.firstInputTime = Date.now();
+    if (this.lastFieldTarget && this.lastFieldTarget !== target) this.fieldSwitchCount++;
+    this.lastFieldTarget = target;
+    this.recordActivity();
     this.keystrokes.push({
       key:       this.isPasswordField(event) ? 'MASKED' : event.key,
       type:      'keydown',
-      target:    this.resolveTarget(event),
+      target,
       timestamp: Date.now(),
     });
   }
@@ -203,10 +250,12 @@ export class UbaTrackerService implements OnDestroy {
   // ── Mouse ─────────────────────────────────────────────────────────────────
 
   private onMousedown(event: MouseEvent): void {
+    this.recordActivity();
     this.mouseEvents.push({ type: 'mousedown', target: this.resolveTarget(event), x: event.clientX, y: event.clientY, button: event.button, timestamp: Date.now() });
   }
 
   private onMouseup(event: MouseEvent): void {
+    this.recordActivity();
     this.mouseEvents.push({ type: 'mouseup', target: this.resolveTarget(event), x: event.clientX, y: event.clientY, button: event.button, timestamp: Date.now() });
   }
 
@@ -214,6 +263,7 @@ export class UbaTrackerService implements OnDestroy {
     const now = Date.now();
     if (now - this.moveThrottle < 200) return;
     this.moveThrottle = now;
+    this.recordActivity();
     this.mouseEvents.push({ type: 'mousemove', target: this.resolveTarget(event), x: event.clientX, y: event.clientY, timestamp: now });
   }
 
@@ -225,6 +275,7 @@ export class UbaTrackerService implements OnDestroy {
   }
 
   private onClick(event: MouseEvent): void {
+    this.recordActivity();
     this.clicks.push({ target: this.resolveTarget(event), x: event.clientX, y: event.clientY, timestamp: Date.now() });
   }
 
@@ -264,6 +315,11 @@ export class UbaTrackerService implements OnDestroy {
   resetPageTimer(page: string): void {
     this.currentPage       = page;
     this.pageEntryTime     = Date.now();
+    this.firstInputTime    = 0;
+    this.lastFieldTarget   = '';
+    this.fieldSwitchCount  = 0;
+    this.lastActivityTime  = 0;
+    this.totalIdleMs       = 0;
     this.keystrokes        = [];
     this.mouseEvents       = [];
     this.clicks            = [];
@@ -273,14 +329,96 @@ export class UbaTrackerService implements OnDestroy {
     this.windowBlurCount   = 0;
   }
 
+  private computeMetrics(now: number): Omit<UbaTelemetry,
+    'sessionId'|'ipAddress'|'location'|
+    'keystrokes'|'mouseEvents'|'clicks'|'clipboardAttempts'|'pageNavigations'
+  > {
+    const dwellMs   = now - this.pageEntryTime;
+    const dwellSecs = dwellMs / 1000 || 1;
+
+    // ── Keystroke metrics ──────────────────────────────────────────────
+    const downs = this.keystrokes.filter(k => k.type === 'keydown');
+    const ups   = this.keystrokes.filter(k => k.type === 'keyup');
+    const keystrokeCount = downs.length;
+    const backspaceCount = downs.filter(k => k.key === 'Backspace').length;
+    const specialKeyCount = downs.filter(k => k.key.length > 1 && k.key !== 'Backspace').length;
+
+    // Key hold times: match each keydown with nearest keyup of same key
+    const holdTimes: number[] = [];
+    for (const d of downs) {
+      const u = ups.find(u => u.key === d.key && u.timestamp >= d.timestamp);
+      if (u) holdTimes.push(u.timestamp - d.timestamp);
+    }
+    const avgKeyHoldTime = holdTimes.length
+      ? holdTimes.reduce((s, v) => s + v, 0) / holdTimes.length : 0;
+
+    // Flight times: time between consecutive keydown events
+    const flightTimes: number[] = [];
+    for (let i = 1; i < downs.length; i++)
+      flightTimes.push(downs[i].timestamp - downs[i - 1].timestamp);
+    const avgFlightTime = flightTimes.length
+      ? flightTimes.reduce((s, v) => s + v, 0) / flightTimes.length : 0;
+    const stdFlightTime = flightTimes.length
+      ? Math.sqrt(flightTimes.reduce((s, v) => s + (v - avgFlightTime) ** 2, 0) / flightTimes.length)
+      : 0;
+    const typingSpeed = keystrokeCount / dwellSecs;
+
+    // ── Mouse metrics ─────────────────────────────────────────────────
+    const moves = this.mouseEvents.filter(e => e.type === 'mousemove');
+    let mouseDistance = 0;
+    const speeds: number[] = [];
+    for (let i = 1; i < moves.length; i++) {
+      const dx = moves[i].x - moves[i - 1].x;
+      const dy = moves[i].y - moves[i - 1].y;
+      const dt = (moves[i].timestamp - moves[i - 1].timestamp) / 1000 || 0.001;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      mouseDistance += dist;
+      speeds.push(dist / dt);
+    }
+    const mouseEventCount = this.mouseEvents.length;
+    const avgMouseSpeed = speeds.length ? speeds.reduce((s, v) => s + v, 0) / speeds.length : 0;
+    const maxMouseSpeed = speeds.length ? Math.max(...speeds) : 0;
+    const clickCount = this.clicks.length;
+    const clickFrequency = clickCount / dwellSecs;
+
+    // ── Form / navigation metrics ──────────────────────────────────────
+    const navigationCount = this.pageNavigations.length;
+    const timeBeforeFirstInput = this.firstInputTime ? this.firstInputTime - this.pageEntryTime : 0;
+    const formCompletionTime   = this.firstInputTime ? now - this.firstInputTime : 0;
+    const idleTimeRatio        = dwellMs > 0 ? this.totalIdleMs / dwellMs : 0;
+
+    return {
+      pageDwellTime: dwellMs,
+      tabSwitchCount: this.tabSwitchCount,
+      windowBlurCount: this.windowBlurCount,
+      keystrokeCount,
+      avgKeyHoldTime,
+      avgFlightTime,
+      stdFlightTime,
+      typingSpeed,
+      backspaceCount,
+      specialKeyCount,
+      mouseEventCount,
+      mouseDistance,
+      avgMouseSpeed,
+      maxMouseSpeed,
+      clickCount,
+      clickFrequency,
+      navigationCount,
+      timeBeforeFirstInput,
+      formCompletionTime,
+      fieldSwitchCount: this.fieldSwitchCount,
+      idleTimeRatio,
+    };
+  }
+
   peekTelemetry(): UbaTelemetry {
+    const now = Date.now();
     return {
       sessionId:         this.sessionId,
       ipAddress:         this.ipAddress,
       location:          this.location,
-      pageDwellTime:     Date.now() - this.pageEntryTime,
-      tabSwitchCount:    this.tabSwitchCount,
-      windowBlurCount:   this.windowBlurCount,
+      ...this.computeMetrics(now),
       keystrokes:        [...this.keystrokes],
       mouseEvents:       [...this.mouseEvents],
       clicks:            [...this.clicks],
@@ -290,13 +428,12 @@ export class UbaTrackerService implements OnDestroy {
   }
 
   flushBatch(page: string): UbaTelemetry {
+    const now = Date.now();
     const telemetry: UbaTelemetry = {
       sessionId:         this.sessionId,
       ipAddress:         this.ipAddress,
       location:          this.location,
-      pageDwellTime:     Date.now() - this.pageEntryTime,
-      tabSwitchCount:    this.tabSwitchCount,
-      windowBlurCount:   this.windowBlurCount,
+      ...this.computeMetrics(now),
       keystrokes:        [...this.keystrokes],
       mouseEvents:       [...this.mouseEvents],
       clicks:            [...this.clicks],

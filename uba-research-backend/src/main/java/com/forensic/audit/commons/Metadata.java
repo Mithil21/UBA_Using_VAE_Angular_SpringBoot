@@ -16,9 +16,28 @@ public class Metadata<T> {
     private long pageDwellTime;
     private int tabSwitchCount;
     private int windowBlurCount;
+    private int keystrokeCount;
+    private double avgKeyHoldTime;
+    private double avgFlightTime;
+    private double stdFlightTime;
+    private double typingSpeed;
+    private int backspaceCount;
+    private int specialKeyCount;
+    private int mouseEventCount;
+    private double mouseDistance;
+    private double avgMouseSpeed;
+    private double maxMouseSpeed;
+    private int clickCount;
+    private double clickFrequency;
+    private int navigationCount;
+    private long timeBeforeFirstInput;
+    private long formCompletionTime;
+    private int fieldSwitchCount;
+    private double idleTimeRatio;
     private List<Keystroke> keystrokes;
     private List<MouseEvent> mouseEvents;
     private List<Click> clicks;
+    private List<Object> clipboardAttempts;
     private List<PageNavigation> pageNavigations;
 
     @Data

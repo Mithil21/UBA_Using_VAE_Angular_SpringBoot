@@ -11,14 +11,12 @@ export interface SecureRequestEnvelope<T> {
 }
 
 export interface RegisterRequest { username: string; email: string; password: string; }
-export interface LoginRequest    { username: string; password: string; }
+export interface LoginRequest    { email: string; password: string; }
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly baseUrl   = '/api/auth';
   private readonly cryptoUrl = '/api/crypto';
-  private cachedPublicKey: string | null = null;
-
   constructor(
     private http: HttpClient,
     private cryptoService: CryptoService,
@@ -27,11 +25,9 @@ export class AuthService {
   ) {}
 
   async fetchServerPublicKey(): Promise<string> {
-    if (this.cachedPublicKey) return this.cachedPublicKey;
-    this.cachedPublicKey = await firstValueFrom(
+    return firstValueFrom(
       this.http.get(`${this.cryptoUrl}/public-key`, { responseType: 'text' })
     );
-    return this.cachedPublicKey!;
   }
 
   private async buildAndSend<T extends object>(
@@ -43,16 +39,6 @@ export class AuthService {
     const publicKey    = await this.fetchServerPublicKey();
     const encrypted    = await this.cryptoService.encrypt(ubaTelemetry, payload, publicKey);
     const envelope: SecureRequestEnvelope<T> = { payload, metadata: encrypted };
-
-    console.group(`%c🚀 ENVELOPE SENT TO BACKEND — ${page.toUpperCase()}`, 'color:#38bdf8;font-weight:700;font-size:14px');
-    console.log('%c📋 payload  (plaintext)', 'color:#818cf8;font-weight:600');
-    console.log(JSON.stringify(envelope.payload, null, 2));
-    console.log('%c🔒 metadata  (encrypted)', 'color:#f59e0b;font-weight:600');
-    console.log(JSON.stringify(envelope.metadata, null, 2));
-    console.log('%c📦 full envelope (copy-pasteable)', 'color:#38bdf8;font-weight:600');
-    console.log(JSON.stringify(envelope, null, 2));
-    console.groupEnd();
-
     return firstValueFrom(this.http.post(endpoint, envelope, { responseType: 'text' }));
   }
 
@@ -78,13 +64,14 @@ export class AuthService {
     console.log(JSON.stringify(envelope, null, 2));
     console.groupEnd();
 
-    const serverMessage = await firstValueFrom(
+    let serverMessage: string;
+    serverMessage = await firstValueFrom(
       this.http.post(`${this.baseUrl}/login`, envelope, { responseType: 'text' })
     );
 
     // Store snapshot for dashboard
     this.sessionStore.snapshot = {
-      username:          data.username,
+      username:          data.email,
       serverMessage,
       loginTime:         Date.now(),
       telemetry:         telemetrySnapshot,
