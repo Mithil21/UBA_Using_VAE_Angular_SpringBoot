@@ -1,297 +1,364 @@
-# UBA Research - Comprehensive User Behavior Analytics System
+# UBA-VAE — User Behaviour Analytics with Variational Autoencoder
 
-A complete User Behavior Analytics (UBA) system with AI-powered threat detection covering 10 critical security scenarios.
+> MSc Advanced Computer Science Dissertation Project  
+> University of Manchester, 2025–2026  
+> Real-time bot detection at form submission boundaries using unsupervised deep learning and behavioural biometrics.
 
-## 🏗️ Architecture
+---
+
+## What This System Does
+
+Traditional bot detection relies on CAPTCHAs, IP blacklists, and rate limiting — all bypassable. This system instead analyses **how** a user interacts with a form, not just what they submit.
+
+A Variational Autoencoder (VAE) is trained exclusively on normal human interaction data. At registration and login, a 28-feature behavioural fingerprint is extracted from the user's keystrokes, mouse movements, and session context. The VAE reconstructs this fingerprint — normal users produce low reconstruction error and are accepted; bots produce high error and are rejected.
+
+**Key results from end-to-end evaluation:**
+
+| Profile | MSE | Probability | Decision |
+|---|---|---|---|
+| Real human (live test) | 1.93 | 0.9351 | ✅ Accepted |
+| Normal — average typist | 1.26 | 0.9699 | ✅ Accepted |
+| Normal — slow/elderly typist | 1.90 | 0.9375 | ✅ Accepted |
+| Dumb bot (10ms flight time) | 2.38 | 0.3380 | ❌ Rejected |
+| Smart bot (jitter added) | 2.33 | 0.3649 | ❌ Rejected |
+| Headless browser (Selenium) | 2.34 | 0.3627 | ❌ Rejected |
+| Human-mimicking bot | 2.38 | 0.3383 | ❌ Rejected |
+| Credential stuffing tool | 2.99 | 0.1070 | ❌ Rejected |
+
+**True Positive Rate (bot detection): 100% | True Negative Rate (human acceptance): 100%**
+
+---
+
+## Architecture
 
 ```
-├── uba-research/                    # Angular Frontend
-├── uba-research-backend/            # Spring Boot Backend  
-├── uba-research-pythonAI/           # Python AI Models
-└── uba-analytics-library/           # Reusable UBA Components
+┌─────────────────────────────────────────────────────────────┐
+│                     Angular Frontend                         │
+│  UbaTrackerService — captures keystrokes, mouse, session    │
+│  AES-256 + RSA-OAEP payload encryption before transmission  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ HTTPS encrypted payload
+┌──────────────────────────▼──────────────────────────────────┐
+│                   Spring Boot Backend                        │
+│                                                              │
+│  UbaDecryptionFilter   — decrypts AES+RSA payload           │
+│  VAEAnalysis           — extracts 28 features, runs ONNX    │
+│  AuthController        — register / login endpoints         │
+│  TestVAEController     — debug endpoint (dev profile only)  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ 28-feature float[]
+┌──────────────────────────▼──────────────────────────────────┐
+│              ONNX Runtime — VAE Inference                    │
+│  user_behavior_vae.onnx  — exported from PyTorch            │
+│  Reconstruction error → normalised sigmoid → probability    │
+└─────────────────────────────────────────────────────────────┘
+
+Python (offline training pipeline)
+  data_generator.py  — synthetic data (CMU + BALABIT + Fitts + Curvature)
+  vae_model.py       — VAE training, ROC evaluation, ONNX export
 ```
 
-## 🚀 Quick Start
+---
 
-### Prerequisites
-- Node.js 18+
-- Java 17+
-- Python 3.8+
-- Maven 3.6+
+## Repository Structure
 
-### Installation
+```
+UBA_Using_VAE_Angular_SpringBoot/
+│
+├── uba_research_ui/                    # Angular 17 frontend
+│   └── src/app/core/services/
+│       └── uba-tracker.service.ts      # Keystroke + mouse telemetry collector
+│
+├── uba-research-backend/               # Spring Boot 3 backend
+│   └── src/main/java/com/forensic/audit/
+│       ├── analysis/
+│       │   └── VAEAnalysis.java        # 28-feature extraction + ONNX inference
+│       ├── commons/
+│       │   └── Metadata.java           # Telemetry deserialization model
+│       ├── controller/
+│       │   ├── AuthController.java     # /api/auth/register + /api/auth/login
+│       │   └── TestVAEController.java  # /api/debug/vae-test (dev only)
+│       └── filter/
+│           └── UbaDecryptionFilter.java # AES-256/RSA-OAEP decryption
+│
+├── uba-research-pythonAI/              # Python ML pipeline
+│   ├── data_generator.py               # Synthetic dataset generation
+│   ├── vae_model.py                    # VAE training + evaluation + ONNX export
+│   ├── test_vae_endpoint.py            # End-to-end bot detection test suite
+│   └── balabit_loader.py               # BALABIT dataset preprocessor
+│
+└── uba-analytics-library/              # Shared Angular UBA components
+```
+
+---
+
+## The 28 Behavioural Features
+
+| # | Feature | Source | Human signal |
+|---|---|---|---|
+| 0 | avgFlightTime | CMU dataset | Time between keystrokes |
+| 1 | stdFlightTime | CMU dataset | Variance in typing rhythm |
+| 2 | backspaceRatio | Keystrokes | Humans make mistakes |
+| 3 | keystrokeCount | Keystrokes | Form length indicator |
+| 4 | medianFlightTime | CMU dataset | Robust timing measure |
+| 5 | meanClickInterval | Click events | Time between clicks |
+| 6 | clickCount | Click events | Interaction count |
+| 7 | meanMouseDistance | BALABIT dataset | Step size distribution |
+| 8 | stdMouseDistance | BALABIT dataset | Path variation |
+| 9 | mouseEventCount | Mouse events | Movement frequency |
+| 10 | meanMouseInterval | BALABIT dataset | Inter-event timing |
+| 11 | pageDwellSeconds | Session | Time on page |
+| 12 | tabSwitchCount | Session | Human multitasking |
+| 13 | windowBlurCount | Session | Focus changes |
+| 14 | navigationCount | Session | Page history |
+| 15 | timeBeforeFirstInput | Session | Reading time |
+| 16 | formCompletionTime | Session | Total typing duration |
+| 17 | fieldSwitchCount | Session | Tab/click between fields |
+| 18 | keystrokeCount2 | Keystrokes | Duplicate for VAE weighting |
+| 19 | avgKeyHoldTime | Keystrokes | Key press duration |
+| 20 | typingSpeed | Derived | Keystrokes per second |
+| 21 | backspaceCount | Keystrokes | Raw correction count |
+| 22 | specialKeyCount | Keystrokes | Non-alpha key usage |
+| 23 | mouseDistance | BALABIT dataset | Total path length |
+| 24 | avgMouseSpeed | BALABIT dataset | Movement velocity |
+| 25 | maxMouseSpeed | BALABIT dataset | Peak speed (Fitts' Law) |
+| 26 | clickFrequency | Derived | Clicks per second |
+| 27 | idleTimeRatio | Session | Fraction of idle gaps >3s |
+
+---
+
+## Data Generation Pipeline
+
+Training data is synthetic but anchored to two real-world datasets:
+
+**CMU Keystroke Dynamics Dataset** (Killourhy & Maxion, 2009)
+- 51 subjects typing the same password repeatedly
+- Provides statistically grounded hold/flight time distributions
+- Download: https://www.cs.cmu.edu/~keystroke/
+
+**BALABIT Mouse Dynamics Challenge Dataset** (Fülöp et al., 2016)
+- 10 users, real desktop sessions over 3 months
+- Provides mouse speed, distance, and interval distributions
+- Download: https://github.com/balabit/Mouse-Dynamics-Challenge
+
+**Biomechanical validation:**
+- **Fitts' Law** — movement duration validated against `MT = a + b·log₂(2D/W)`
+- **Curvature index** — path shape enforced in range 1.05–3.0 (human arcs vs bot straight lines)
+- **Velocity bell curve** — ease-in/out timing via sin modulation
+
+**6 human personas** (weighted by real-world population):
+`fast_typist, average_typist, slow_typist, hunt_and_peck, elderly, power_user`
+
+**4 bot profiles:**
+`dumb_bot, smart_bot, headless, human_mimicking`
+
+---
+
+## Prerequisites
+
+| Tool | Version | Purpose |
+|---|---|---|
+| Node.js | 18+ | Angular frontend |
+| Angular CLI | 17+ | `npm install -g @angular/cli` |
+| Java | 17+ | Spring Boot backend |
+| Maven | 3.6+ | Backend build |
+| Python | 3.10+ | ML training pipeline |
+| pip packages | — | See below |
+
 ```bash
-# 1. Install Python dependencies
+pip install torch numpy pandas scikit-learn matplotlib joblib requests
+```
+
+---
+
+## Setup & Run
+
+### 1. Train the VAE model (run once)
+
+```bash
 cd uba-research-pythonAI
-pip install -r requirements.txt
 
-# 2. Start Spring Boot backend
-cd ../uba-research-backend
+# Download datasets
+# CMU:     https://www.cs.cmu.edu/~keystroke/ → DSL-StrongPasswordData.csv
+# BALABIT: git clone https://github.com/balabit/Mouse-Dynamics-Challenge
+#          python balabit_loader.py → produces balabit_mouse.csv
+
+# Generate training data
+python data_generator.py
+# Produces: normal_behavior_features.npy
+#           user_behavior_features.npy
+#           user_behavior_labels.npy
+
+# Train VAE + export ONNX
+python vae_model.py
+# Produces: user_behavior_vae.onnx  ← copy to Spring Boot
+#           user_behavior_vae.pth
+#           roc_curve.png
+#           training_loss.png
+# Also prints SCALER_MEAN, SCALER_SCALE, THRESHOLD → paste into VAEAnalysis.java
+```
+
+### 2. Configure Spring Boot
+
+```bash
+# Copy ONNX model
+cp uba-research-pythonAI/user_behavior_vae.onnx \
+   uba-research-backend/src/main/resources/models/
+
+# Paste printed scaler constants into:
+# uba-research-backend/src/main/java/com/forensic/audit/analysis/VAEAnalysis.java
+# — SCALER_MEAN[], SCALER_SCALE[], THRESHOLD
+```
+
+Update `application.properties`:
+```properties
+spring.profiles.active=dev
+spring.datasource.url=jdbc:postgresql://localhost:5432/uba_db
+spring.datasource.username=your_user
+spring.datasource.password=your_password
+```
+
+### 3. Start the backend
+
+```bash
+cd uba-research-backend
 mvn spring-boot:run
+# Starts on http://localhost:8080
+# Look for: [VAE] Model loaded — input_dim=28  threshold=X.XXXXXXX
+```
 
-# 3. Start Angular frontend
-cd ../uba-research
+### 4. Start the frontend
+
+```bash
+cd uba_research_ui
 npm install
 ng serve
-```
-
-Access: `http://localhost:4200`
-
-## 🛡️ Security Scenarios Coverage
-
-### ✅ 1. Penetration & Intrusion Detection
-**How it works:** Monitors mouse, keyboard, timing patterns for unauthorized access detection.
-
-**Files:**
-- `user-tracking.ts` - Captures behavioral data
-- `anomaly_detector.py` - VAE model for pattern analysis
-- `AuthController.java` - Validates login attempts
-
-**APIs:**
-- `POST /api/auth/login` - Login with behavior analysis
-- `POST /detect` - Python AI detection endpoint
-
-**Test:** Login with unusual typing patterns or automated tools.
-
----
-
-### ✅ 2. Session Hijacking & Identity Spoofing  
-**How it works:** Behavioral fingerprinting detects session token misuse.
-
-**Files:**
-- `user-tracking.ts` - Session behavior tracking
-- `behavior-tracking.interceptor.ts` - Stealth headers
-- `vae_model.py` - Identity verification
-
-**APIs:**
-- All HTTP requests include behavioral headers
-- `POST /detect` - Continuous session validation
-
-**Test:** Use stolen session tokens from different devices/locations.
-
----
-
-### ✅ 3. Anomalous API/Service Usage
-**How it works:** Tracks endpoint access patterns, payload sizes, frequency.
-
-**Files:**
-- `behavior-tracking.interceptor.ts` - API call monitoring
-- `anomaly_detector.py` - Usage pattern analysis
-- `SecurityAnalysisService.java` - API abuse detection
-
-**APIs:**
-- All API calls automatically monitored
-- `POST /api/security/insider-activity` - Unusual API usage
-
-**Test:** Make rapid API calls or access unusual endpoint combinations.
-
----
-
-### ✅ 4. Application Layer Attacks
-**How it works:** Analyzes payload anomalies and input timing for injection attempts.
-
-**Files:**
-- `user-tracking.ts` - Input pattern tracking
-- `malware_detector.py` - Payload analysis
-- `SecurityController.java` - Attack pattern detection
-
-**APIs:**
-- `POST /detect` - Payload anomaly detection
-- `POST /api/security/privilege-usage` - Injection attempt logging
-
-**Test:** Submit SQL injection or XSS payloads in forms.
-
----
-
-### ✅ 5. Account Takeovers (ATO)
-**How it works:** IP/location tracking with behavioral pattern changes.
-
-**Files:**
-- `user-tracking.ts` - Location and device tracking
-- `SecurityMonitorService.ts` - Device fingerprinting
-- `enhanced_anomaly_detector.py` - Takeover detection
-
-**APIs:**
-- `POST /api/auth/login` - Location-based validation
-- `POST /api/security/insider-activity` - Suspicious access logging
-
-**Test:** Login from new locations with different behavioral patterns.
-
----
-
-### ✅ 6. Data Exfiltration / Leakage
-**How it works:** Monitors download patterns, API exports, sensitive screen access.
-
-**Files:**
-- `behavior-tracking.interceptor.ts` - Download monitoring
-- `SecurityAnalysisService.java` - Exfiltration pattern analysis
-- `enhanced_anomaly_detector.py` - Data access anomalies
-
-**APIs:**
-- `POST /api/security/data-access` - Data access tracking
-- `POST /api/security/insider-activity` - Export monitoring
-
-**Test:** Download multiple files or export large datasets rapidly.
-
----
-
-### ✅ 7. Insider Threats ⭐ *New*
-**How it works:** Tracks authenticated user behavior, time-of-day patterns, role violations.
-
-**Files:**
-- `SecurityMonitorService.ts` - Insider activity tracking
-- `SecurityAnalysisService.java` - After-hours analysis
-- `enhanced_anomaly_detector.py` - Insider threat AI
-
-**APIs:**
-- `POST /api/security/insider-activity` - Activity logging
-- `POST enhanced_anomaly_detector.py insider` - AI analysis
-
-**Test:**
-```typescript
-// After login, simulate after-hours access
-securityMonitor.trackInsiderActivity('DATA_EXPORT', 'sensitive_files');
+# Opens http://localhost:4200
 ```
 
 ---
 
-### ✅ 8. Privilege Escalation / Role Abuse ⭐ *New*
-**How it works:** Monitors role vs permission mismatches, scope violations.
+## Testing
 
-**Files:**
-- `behavior-tracking.interceptor.ts` - Auto-tracks admin API calls
-- `SecurityAnalysisService.java` - Permission validation
-- `enhanced_anomaly_detector.py` - Privilege anomaly detection
+### Manual test — register as a human
 
-**APIs:**
-- `POST /api/security/privilege-usage` - Permission tracking
-- `POST enhanced_anomaly_detector.py privilege` - AI validation
+1. Open `http://localhost:4200/register`
+2. Wait ~2 seconds before typing (natural reading time)
+3. Type email and password at normal pace
+4. Submit
 
-**Test:**
-```typescript
-// Make admin API call as regular user
-http.get('http://localhost:8080/admin/users').subscribe();
+Expected Spring Boot log:
+```
+[VAE] mse=~1.5  normalizedMse=~0.65  probability=~0.90  accepted=true
 ```
 
----
+### Automated test suite — 8 profiles (human + bot)
 
-### ✅ 9. Phishing & Malware Indicators ⭐ *New*
-**How it works:** Device fingerprinting, browser integrity checks, automation detection.
+Requires the debug endpoint (dev profile must be active):
 
-**Files:**
-- `SecurityMonitorService.ts` - Device fingerprinting
-- `security.guard.ts` - Real-time threat blocking
-- `malware_detector.py` - AI malware detection
-
-**APIs:**
-- `POST /detect` - Malware indicator analysis
-- Route guards automatically check threats
-
-**Test:**
-```javascript
-// Simulate automation in browser console
-navigator.webdriver = true;
-// Reload page - access should be blocked
-```
-
----
-
-### ✅ 10. Compliance Violations (GDPR, HIPAA) ⭐ *New*
-**How it works:** Audit trail logging, policy violation detection, consent validation.
-
-**Files:**
-- `SecurityMonitorService.ts` - Compliance tracking
-- `SecurityAnalysisService.java` - GDPR/HIPAA validation
-- `enhanced_anomaly_detector.py` - Compliance anomaly detection
-
-**APIs:**
-- `POST /api/security/data-access` - Data access logging
-- `POST enhanced_anomaly_detector.py compliance` - AI compliance check
-
-**Test:**
-```typescript
-// Access personal data without consent
-securityMonitor.trackDataAccess('personal_data', 'unauthorized');
-```
-
-## 🔄 System Flow
-
-```mermaid
-graph TD
-    A[User Login] --> B[UserTracking Service]
-    B --> C[SecurityMonitor Service]
-    C --> D[HTTP Interceptor]
-    D --> E[Spring Security Controller]
-    E --> F[SecurityAnalysisService]
-    F --> G[Python AI Models]
-    G --> H[Threat Detection Result]
-    H --> I[SecurityGuard Decision]
-    I --> J[Allow/Block Access]
-```
-
-## 🧪 Testing Scenarios
-
-### Complete Test Suite
 ```bash
-# 1. Start all services
-npm run start:all
-
-# 2. Run security tests
-npm run test:security
-
-# 3. Test individual threats
-python test_threats.py --scenario insider
-python test_threats.py --scenario privilege
-python test_threats.py --scenario malware
-python test_threats.py --scenario compliance
+cd uba-research-pythonAI
+python test_vae_endpoint.py
 ```
 
-### Manual Testing
-1. **Login** with different behavioral patterns
-2. **Navigate** to protected routes
-3. **Make API calls** with different roles
-4. **Access sensitive data** at unusual times
-5. **Monitor console** for security alerts
+Expected output:
+```
+✅ PASS  Normal — Average typist          MSE=1.26  Prob=0.9699  ACCEPT
+✅ PASS  Normal — Slow/careful typist     MSE=1.90  Prob=0.9375  ACCEPT
+✅ PASS  Attack — Dumb bot                MSE=2.38  Prob=0.3380  REJECT
+✅ PASS  Attack — Smart bot               MSE=2.33  Prob=0.3649  REJECT
+✅ PASS  Attack — Headless browser        MSE=2.34  Prob=0.3627  REJECT
+✅ PASS  Attack — Human-mimicking bot     MSE=2.38  Prob=0.3383  REJECT
+✅ PASS  Attack — Credential stuffing     MSE=2.99  Prob=0.1070  REJECT
 
-## 📊 Monitoring & Alerts
-
-- **Browser Console**: Real-time threat detection
-- **Spring Logs**: Security analysis results  
-- **Network Tab**: Security API calls
-- **Python Output**: AI model predictions
-
-## 🔧 Configuration
-
-### Security Thresholds
-```typescript
-// SecurityMonitorService.ts
-private isAfterBusinessHours(): boolean {
-  const hour = new Date().getHours();
-  return hour < 8 || hour > 18; // Configurable
-}
+True Positive Rate (bot detection):    100.0%
+True Negative Rate (human acceptance): 100.0%
 ```
 
-### AI Model Sensitivity
-```python
-# enhanced_anomaly_detector.py
-self.insider_model = IsolationForest(contamination=0.15)  # Adjustable
+---
+
+## How the VAE Decision Works
+
+```
+Raw features (28 floats)
+    ↓
+StandardScaler normalisation
+    ↓
+ONNX VAE inference → reconstruction
+    ↓
+MSE = mean((original - reconstruction)²)
+    ↓
+normalizedMse = mse / THRESHOLD
+    ↓
+probability = 1 / (1 + exp(5 × (normalizedMse - 1)))
+    ↓
+probability ≥ 0.50 → ACCEPT
+probability <  0.50 → REJECT
 ```
 
-## 📈 Performance
+The sigmoid is centred at the threshold — probability is exactly 0.50 when MSE equals THRESHOLD, approaching 1.0 for clearly normal inputs and 0.0 for clear anomalies.
 
-- **Real-time Detection**: <100ms response time
-- **AI Processing**: <500ms for threat analysis
-- **Memory Usage**: <50MB additional overhead
-- **Network Impact**: Minimal with compressed headers
+---
 
-## 🚨 Security Features
+## Threshold Tuning
 
-- **Stealth Monitoring**: Hidden in HTTP headers
-- **AI-Powered Detection**: Machine learning threat analysis
-- **Real-time Blocking**: Immediate threat response
-- **Comprehensive Logging**: Full audit trail
-- **Multi-layer Protection**: Frontend + Backend + AI
+The default threshold (`2.10f` in `VAEAnalysis.java`) was calibrated via ROC curve using Youden's J statistic on the synthetic evaluation dataset. After any retrain:
 
-## 📝 License
+1. Run `python vae_model.py`
+2. Check the printed `THRESHOLD` value from `print_java_scaler_constants()`
+3. Update `VAEAnalysis.java` — `SCALER_MEAN`, `SCALER_SCALE`, `THRESHOLD`
+4. Rebuild and restart Spring Boot
 
-MIT License - See LICENSE file for details.
+To adjust sensitivity manually:
+- **Lower threshold** → catches more bots, more false positives on edge-case humans
+- **Higher threshold** → fewer false positives, may miss sophisticated bots
+
+---
+
+## Security Design
+
+| Layer | Mechanism |
+|---|---|
+| Transport | HTTPS |
+| Payload encryption | AES-256-GCM + RSA-OAEP (Angular → Spring Boot) |
+| Bot detection | VAE reconstruction error (unsupervised) |
+| Password fields | Masked in telemetry (`MASKED` literal) |
+| Clipboard | Blocked and logged |
+| DevTools | F12 / Ctrl+Shift+I blocked |
+| Debug endpoints | `@Profile("dev")` — not available in production |
+
+---
+
+## Academic References
+
+- Killourhy, K. S., & Maxion, R. A. (2009). *Comparing anomaly-detection algorithms for keystroke dynamics.* DSN.
+- Fülöp, Á., Kovács, L., Kurics, T., & Windhager-Pokol, E. (2016). *Balabit Mouse Dynamics Challenge data set.*
+- Fitts, P. M. (1954). *The information capacity of the human motor system in controlling the amplitude of movement.* Journal of Experimental Psychology, 47(6), 381–391.
+- Antal, M., & Egyed-Zsigmond, E. (2019). *Intrusion detection using mouse dynamics.* IET Biometrics, 8(5), 285–294.
+- Kingma, D. P., & Welling, M. (2013). *Auto-encoding variational Bayes.* arXiv:1312.6114.
+
+---
+
+## Limitations
+
+- VAE trained on synthetic data anchored to CMU/BALABIT — threshold requires recalibration on real production traffic
+- Mouse feature discrimination is weaker when raw event lists are empty (pre-computed scalars used as fallback)
+- 51 CMU subjects is a narrow demographic — population diversity is a known limitation of the dataset
+- AUC of 1.0 on synthetic evaluation reflects controlled bot patterns; real adversarial bots will require ongoing threshold tuning
+
+---
+
+## Planned: Hyperledger Fabric Integration
+
+Upcoming addition — tamper-evident audit trail using Hyperledger Fabric:
+
+- Every accepted registration commits `SHA-256(user_record || metadata_record)` to the Fabric ledger
+- UUID used as the ledger key, correlating DB rows and ledger entries
+- Scheduled verification job re-hashes DB rows and compares against ledger
+- Any manual DB modification detected as hash mismatch → tamper alert raised
+
+---
+
+## License
+
+MIT License. See `LICENSE` for details.
