@@ -95,7 +95,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
-@Slf4j
+
 @Component
 @RequiredArgsConstructor
 public class UbaDecryptionFilter extends OncePerRequestFilter {
@@ -111,7 +111,8 @@ public class UbaDecryptionFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return !path.equals("/api/auth/login") && !path.equals("/api/auth/register");
+        return (!path.equals("/api/auth/login") && !path.equals("/api/auth/register"))
+                || path.startsWith("/api/debug/");
     }
 
     @Override

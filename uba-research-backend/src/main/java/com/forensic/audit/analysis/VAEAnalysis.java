@@ -43,7 +43,7 @@ public class VAEAnalysis {
 
     // ROC-optimal threshold from Python evaluate_with_roc() (Youden J statistic).
     // Re-paste from print_java_scaler_constants() after every retrain.
-    private static final float THRESHOLD = 4.1433043f;
+    private static final float THRESHOLD = 2.10f;
 
     // Feature names — must match extractFeatures() return order exactly.
     // Used only for debug logging.
