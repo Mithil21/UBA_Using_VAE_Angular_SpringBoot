@@ -101,7 +101,7 @@ export class UbaTrackerService implements OnDestroy {
   private moveThrottle      = 0;
   private overThrottle      = 0;
 
-  private static readonly IDLE_THRESHOLD_MS = 2000;
+  private static readonly IDLE_THRESHOLD_MS = 3000;
 
   private boundKeydown       = this.onKeydown.bind(this);
   private boundKeyup         = this.onKeyup.bind(this);

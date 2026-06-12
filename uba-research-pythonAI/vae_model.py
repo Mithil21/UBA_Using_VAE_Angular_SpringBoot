@@ -340,8 +340,9 @@ class UserBehaviorVAE:
             'scaler':           self.scaler,
             'threshold':        self.threshold,
             'input_dim':        self.input_dim,
+            'hidden_dim':       self.model.encoder[0].out_features,  # saves 64
+            'latent_dim':       self.model.mu_layer.out_features,    # saves 6
         }, filepath)
-        print(f"[Save] PyTorch model saved to {filepath}")
 
     def load_model(self, filepath: str):
         checkpoint  = torch.load(filepath, map_location=self.device)

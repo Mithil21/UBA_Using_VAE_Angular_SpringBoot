@@ -5,15 +5,17 @@ from vae_model import VAE
 def export_to_onnx_and_json(model_path='user_behavior_vae.pth', onnx_path='user_behavior_vae.onnx', config_path='vae_config.json'):
     print(f"Loading PyTorch checkpoint from {model_path}...")
     
-    # 1. Load the saved dictionary (with weights_only=False for PyTorch 2.6+ compatibility)
     checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
-    
+
     input_dim = checkpoint['input_dim']
     threshold = float(checkpoint['threshold'])
-    scaler = checkpoint['scaler']
-    
-    # 2. Reconstruct the base PyTorch model
-    model = VAE(input_dim=input_dim, hidden_dim=128, latent_dim=32)
+    scaler    = checkpoint['scaler']
+
+    # Read dims from checkpoint instead of hardcoding
+    hidden_dim = checkpoint.get('hidden_dim', 64)   # falls back to 64 if not stored
+    latent_dim = checkpoint.get('latent_dim', 6)    # falls back to 6 if not stored
+
+    model = VAE(input_dim=input_dim, hidden_dim=hidden_dim, latent_dim=latent_dim)
     model.load_state_dict(checkpoint['model_state_dict'])
     
     # CRITICAL: Set model to evaluation mode before exporting

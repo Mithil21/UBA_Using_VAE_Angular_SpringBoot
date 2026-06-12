@@ -37,10 +37,17 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody User user) {
-        User existingUser = userRepository.findByEmail(user.getEmail())
+    public ResponseEntity<String> login(@RequestBody Payload<User> payload) {
+        VAEAnalysis.AnomalyResult analysis = vaeAnalysis.analyze(payload.getMetadata());
+        System.out.printf("[VAE] error=%.6f probability=%.4f accepted=%b%n",
+                analysis.reconstructionError(), analysis.normalProbability(), analysis.accepted());
+        if (!analysis.accepted()) {
+            return ResponseEntity.status(403).body("Behavioural analysis rejected this request");
+        }
+
+        User existingUser = userRepository.findByEmail(payload.getPayload().getEmail())
                 .orElse(null);
-        if (existingUser == null || !existingUser.getPassword().equals(user.getPassword())) {
+        if (existingUser == null || !existingUser.getPassword().equals(payload.getPayload().getPassword())) {
             return ResponseEntity.status(401).body("Invalid credentials");
         }
         return ResponseEntity.ok("Login successful");
