@@ -140,9 +140,9 @@ export class RegisterComponent {
   calcStrength(): void {
     const p = this.form.password;
     let score = 0;
-    if (p.length >= 8)          score++;
-    if (/[A-Z]/.test(p))        score++;
-    if (/[0-9]/.test(p))        score++;
+    if (p.length >= 8) score++;
+    if (/[A-Z]/.test(p)) score++;
+    if (/[0-9]/.test(p)) score++;
     if (/[^A-Za-z0-9]/.test(p)) score++;
     this.strength = score;
   }
@@ -157,10 +157,10 @@ export class RegisterComponent {
   async onSubmit(): Promise<void> {
     this.loading = true;
     try {
-      const response = await this.authService.register(this.form);
-      console.log('%c✅ Server response:', 'color:#34d399;font-weight:600', response);
-      this.notify.success('Account created! Redirecting to login…');
-      setTimeout(() => this.router.navigate(['/login']), 1500);
+      await this.authService.register(this.form);
+      this.notify.success('Registration submitted! Please check your email.');
+      this.form = { username: '', email: '', password: '' };
+      this.strength = 0;
     } catch (err: unknown) {
       const httpErr = err as { error?: string; status?: number; message?: string };
       this.form = { username: '', email: '', password: '' };

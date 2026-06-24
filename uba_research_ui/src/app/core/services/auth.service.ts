@@ -11,18 +11,18 @@ export interface SecureRequestEnvelope<T> {
 }
 
 export interface RegisterRequest { username: string; email: string; password: string; }
-export interface LoginRequest    { email: string; password: string; }
+export interface LoginRequest { email: string; password: string; }
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly baseUrl   = '/api/auth';
+  private readonly baseUrl = '/api/auth';
   private readonly cryptoUrl = '/api/crypto';
   constructor(
     private http: HttpClient,
     private cryptoService: CryptoService,
     private ubaTracker: UbaTrackerService,
     private sessionStore: SessionStore
-  ) {}
+  ) { }
 
   async fetchServerPublicKey(): Promise<string> {
     return firstValueFrom(
@@ -36,10 +36,24 @@ export class AuthService {
     endpoint: string
   ): Promise<string> {
     const ubaTelemetry = this.ubaTracker.flushBatch(page);
-    const publicKey    = await this.fetchServerPublicKey();
-    const encrypted    = await this.cryptoService.encrypt(ubaTelemetry, payload, publicKey);
+    const publicKey = await this.fetchServerPublicKey();
+    const encrypted = await this.cryptoService.encrypt(ubaTelemetry, payload, publicKey);
     const envelope: SecureRequestEnvelope<T> = { payload, metadata: encrypted };
-    return firstValueFrom(this.http.post(endpoint, envelope, { responseType: 'text' }));
+
+    // observe: 'response' gives us the full response including status
+    const response = await firstValueFrom(
+      this.http.post(endpoint, envelope, {
+        responseType: 'text',
+        observe: 'response',   // ← this is the key change
+      })
+    );
+
+    // 202 = async accepted, 200 = sync success — both are fine
+    if (response.status === 202 || response.status === 200) {
+      return response.body ?? '';
+    }
+
+    throw new Error(response.body ?? 'Request failed');
   }
 
   async register(data: RegisterRequest): Promise<string> {
@@ -51,8 +65,8 @@ export class AuthService {
     const telemetrySnapshot = this.ubaTracker.peekTelemetry();
 
     const ubaTelemetry = this.ubaTracker.flushBatch('login');
-    const publicKey    = await this.fetchServerPublicKey();
-    const encrypted    = await this.cryptoService.encrypt(ubaTelemetry, data, publicKey);
+    const publicKey = await this.fetchServerPublicKey();
+    const encrypted = await this.cryptoService.encrypt(ubaTelemetry, data, publicKey);
     const envelope: SecureRequestEnvelope<LoginRequest> = { payload: data, metadata: encrypted };
 
     console.group('%c🚀 ENVELOPE SENT TO BACKEND — LOGIN', 'color:#38bdf8;font-weight:700;font-size:14px');
@@ -71,10 +85,10 @@ export class AuthService {
 
     // Store snapshot for dashboard
     this.sessionStore.snapshot = {
-      username:          data.email,
+      username: data.email,
       serverMessage,
-      loginTime:         Date.now(),
-      telemetry:         telemetrySnapshot,
+      loginTime: Date.now(),
+      telemetry: telemetrySnapshot,
       encryptedEnvelope: encrypted,
     };
 
