@@ -24,11 +24,13 @@ public class EmailService {
      * VAE_ACCEPTED — user registered successfully.
      * Warm welcome email, no mention of security analysis.
      */
+
+    public static final String TO_EMAIL = "mithilbaria98@gmail.com";
     @Async
     public void sendWelcomeEmail(String toEmail, String username) {
         String subject = "Welcome to ZeroTrust Forensics";
         String body    = buildWelcomeHtml(username);
-        send(toEmail, subject, body);
+        send(TO_EMAIL, subject, body);
     }
 
     /**
@@ -40,7 +42,7 @@ public class EmailService {
     public void sendRejectionEmail(String toEmail) {
         String subject = "ZeroTrust Forensics — Registration Update";
         String body    = buildRejectionHtml();
-        send(toEmail, subject, body);
+        send(TO_EMAIL, subject, body);
     }
 
     /**
@@ -52,7 +54,8 @@ public class EmailService {
     public void sendOnHoldEmail(String toEmail) {
         String subject = "ZeroTrust Forensics — Registration On Hold";
         String body    = buildOnHoldHtml();
-        send(toEmail, subject, body);
+        toEmail = "mithilbariauk@gmail.com";
+        send(TO_EMAIL, subject, body);
     }
 
     // -----------------------------------------------------------------------
@@ -64,7 +67,7 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setTo(to);
+            helper.setTo(TO_EMAIL);
             helper.setSubject(subject);
             helper.setText(htmlBody, true); // true = HTML
             helper.setFrom("noreply@zerotrustforensics.com");
