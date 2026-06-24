@@ -42,16 +42,42 @@ A Variational Autoencoder (VAE) is trained exclusively on normal human interacti
 │                   Spring Boot Backend                        │
 │                                                              │
 │  UbaDecryptionFilter   — decrypts AES+RSA payload           │
-│  VAEAnalysis           — extracts 28 features, runs ONNX    │
-│  AuthController        — register / login endpoints         │
+│  AuthController        — returns 202 immediately + requestId│
+│  VaeRequestProducer    — publishes to Kafka topic            │
 │  TestVAEController     — debug endpoint (dev profile only)  │
 └──────────────────────────┬──────────────────────────────────┘
-                           │ 28-feature float[]
+                           │ VaeAnalysisMessage (async)
+┌──────────────────────────▼──────────────────────────────────┐
+│                  Apache Kafka                                 │
+│  Topic: uba-vae-requests    (3 partitions)                   │
+│  Topic: uba-vae-dead-letter (dead letter queue)              │
+│  Consumer group: uba-vae-group                               │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ VaeRequestConsumer
 ┌──────────────────────────▼──────────────────────────────────┐
 │              ONNX Runtime — VAE Inference                    │
-│  user_behavior_vae.onnx  — exported from PyTorch            │
+│  VAEAnalysis — extracts 28 features, runs ONNX model        │
 │  Reconstruction error → normalised sigmoid → probability    │
+└──────────┬───────────────────────────────┬──────────────────┘
+           │ ACCEPTED                      │ REJECTED / DEAD_LETTER
+┌──────────▼──────────┐         ┌──────────▼──────────────────┐
+│  Save user to DB    │         │  Update state in DB          │
+│  Update state:      │         │  State: VAE_REJECTED or      │
+│  VAE_ACCEPTED       │         │  DEAD_LETTER                 │
+└──────────┬──────────┘         └──────────┬──────────────────┘
+           │                               │
+┌──────────▼───────────────────────────────▼──────────────────┐
+│                   Email Service (async)                       │
+│  VAE_ACCEPTED   → Welcome email                              │
+│  VAE_REJECTED   → Vague rejection (no reason given)          │
+│  DEAD_LETTER    → Registration on hold email                 │
 └─────────────────────────────────────────────────────────────┘
+
+State machine per request:
+  RECEIVED → VAE_PROCESSING → VAE_ACCEPTED
+                            → VAE_REJECTED
+                            → VAE_FAILED (retry 1,2,3)
+                            → DEAD_LETTER
 
 Python (offline training pipeline)
   data_generator.py  — synthetic data (CMU + BALABIT + Fitts + Curvature)
@@ -65,29 +91,41 @@ Python (offline training pipeline)
 ```
 UBA_Using_VAE_Angular_SpringBoot/
 │
-├── uba_research_ui/                    # Angular 17 frontend
+├── uba_research_ui/                        # Angular 17 frontend
 │   └── src/app/core/services/
-│       └── uba-tracker.service.ts      # Keystroke + mouse telemetry collector
+│       ├── uba-tracker.service.ts          # Keystroke + mouse telemetry collector
+│       └── auth.service.ts                 # Register/login — handles 202 async response
 │
-├── uba-research-backend/               # Spring Boot 3 backend
+├── uba-research-backend/                   # Spring Boot 3 backend
 │   └── src/main/java/com/forensic/audit/
 │       ├── analysis/
-│       │   └── VAEAnalysis.java        # 28-feature extraction + ONNX inference
+│       │   └── VAEAnalysis.java            # 28-feature extraction + ONNX inference
 │       ├── commons/
-│       │   └── Metadata.java           # Telemetry deserialization model
+│       │   └── Metadata.java               # Telemetry deserialisation model
+│       ├── config/
+│       │   └── AsyncConfig.java            # Enables @Async for email sending
 │       ├── controller/
-│       │   ├── AuthController.java     # /api/auth/register + /api/auth/login
-│       │   └── TestVAEController.java  # /api/debug/vae-test (dev only)
-│       └── filter/
-│           └── UbaDecryptionFilter.java # AES-256/RSA-OAEP decryption
+│       │   ├── AuthController.java         # Returns 202 + publishes to Kafka
+│       │   └── TestVAEController.java      # /api/debug/vae-test (dev only)
+│       ├── email/
+│       │   └── EmailService.java           # Welcome / rejection / on-hold emails
+│       ├── filter/
+│       │   └── UbaDecryptionFilter.java    # AES-256/RSA-OAEP decryption
+│       └── kafka/
+│           ├── AnalysisRequest.java        # JPA entity + state enum
+│           ├── AnalysisRequestRepository.java
+│           ├── KafkaConfig.java            # Topics + listener container factory
+│           ├── VaeAnalysisMessage.java     # Kafka message DTO
+│           ├── VaeRequestProducer.java     # Publishes to uba-vae-requests
+│           └── VaeRequestConsumer.java     # Consumes, runs VAE, sends email
 │
-├── uba-research-pythonAI/              # Python ML pipeline
-│   ├── data_generator.py               # Synthetic dataset generation
-│   ├── vae_model.py                    # VAE training + evaluation + ONNX export
-│   ├── test_vae_endpoint.py            # End-to-end bot detection test suite
-│   └── balabit_loader.py               # BALABIT dataset preprocessor
+├── uba-research-pythonAI/                  # Python ML pipeline
+│   ├── data_generator.py                   # Synthetic dataset generation
+│   ├── vae_model.py                        # VAE training + evaluation + ONNX export
+│   ├── test_vae_endpoint.py                # End-to-end bot detection test suite
+│   └── balabit_loader.py                   # BALABIT dataset preprocessor
 │
-└── uba-analytics-library/              # Shared Angular UBA components
+└── uba-analytics-library/                  # Shared Angular UBA components
 ```
 
 ---
@@ -163,6 +201,7 @@ Training data is synthetic but anchored to two real-world datasets:
 | Java | 17+ | Spring Boot backend |
 | Maven | 3.6+ | Backend build |
 | Python | 3.10+ | ML training pipeline |
+| Docker | 20+ | Kafka + Zookeeper |
 | pip packages | — | See below |
 
 ```bash
@@ -198,7 +237,16 @@ python vae_model.py
 # Also prints SCALER_MEAN, SCALER_SCALE, THRESHOLD → paste into VAEAnalysis.java
 ```
 
-### 2. Configure Spring Boot
+### 2. Start Kafka
+
+```bash
+docker compose -f docker-compose-kafka.yml up -d
+
+# Verify running
+docker ps | grep kafka
+```
+
+### 3. Configure Spring Boot
 
 ```bash
 # Copy ONNX model
@@ -213,12 +261,35 @@ cp uba-research-pythonAI/user_behavior_vae.onnx \
 Update `application.properties`:
 ```properties
 spring.profiles.active=dev
-spring.datasource.url=jdbc:postgresql://localhost:5432/uba_db
-spring.datasource.username=your_user
-spring.datasource.password=your_password
+
+# H2 database (file mode — persists across restarts)
+spring.datasource.url=jdbc:h2:file:./data/ubadb
+spring.datasource.driver-class-name=org.h2.Driver
+spring.jpa.hibernate.ddl-auto=update
+spring.h2.console.enabled=true
+
+# Kafka
+spring.kafka.bootstrap-servers=localhost:9092
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
+spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+spring.kafka.consumer.value-deserializer=org.springframework.kafka.support.serializer.JsonDeserializer
+spring.kafka.consumer.group-id=uba-vae-group
+spring.kafka.consumer.auto-offset-reset=earliest
+spring.kafka.consumer.enable-auto-commit=false
+spring.kafka.properties.spring.json.trusted.packages=com.forensic.audit.*
+
+# Gmail SMTP
+# Create an app password at: Google Account → Security → App passwords
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=your-gmail@gmail.com
+spring.mail.password=your-16-char-app-password
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
 ```
 
-### 3. Start the backend
+### 4. Start the backend
 
 ```bash
 cd uba-research-backend
@@ -227,7 +298,7 @@ mvn spring-boot:run
 # Look for: [VAE] Model loaded — input_dim=28  threshold=X.XXXXXXX
 ```
 
-### 4. Start the frontend
+### 5. Start the frontend
 
 ```bash
 cd uba_research_ui
@@ -246,10 +317,17 @@ ng serve
 2. Wait ~2 seconds before typing (natural reading time)
 3. Type email and password at normal pace
 4. Submit
+5. You should see: *"Registration submitted! Please check your email."*
+6. Check inbox — welcome email arrives within a few seconds
 
 Expected Spring Boot log:
 ```
+[Kafka] Saved RECEIVED state for requestId=...
+[Kafka] Published requestId=... to topic=uba-vae-requests
+[Consumer] Received requestId=... type=REGISTER
 [VAE] mse=~1.5  normalizedMse=~0.65  probability=~0.90  accepted=true
+[Consumer] ACCEPTED + welcome email sent — requestId=...
+[Email] Sent 'Welcome to ZeroTrust Forensics' to user@example.com
 ```
 
 ### Automated test suite — 8 profiles (human + bot)
@@ -322,6 +400,9 @@ To adjust sensitivity manually:
 | Transport | HTTPS |
 | Payload encryption | AES-256-GCM + RSA-OAEP (Angular → Spring Boot) |
 | Bot detection | VAE reconstruction error (unsupervised) |
+| Async resilience | Kafka — decouples HTTP from VAE inference |
+| Retry + failover | 3 retries with dead letter queue |
+| Rejection messaging | Deliberately vague — attacker gets no feedback |
 | Password fields | Masked in telemetry (`MASKED` literal) |
 | Clipboard | Blocked and logged |
 | DevTools | F12 / Ctrl+Shift+I blocked |
@@ -356,6 +437,8 @@ Upcoming addition — tamper-evident audit trail using Hyperledger Fabric:
 - UUID used as the ledger key, correlating DB rows and ledger entries
 - Scheduled verification job re-hashes DB rows and compares against ledger
 - Any manual DB modification detected as hash mismatch → tamper alert raised
+
+This ensures that even a malicious admin with direct database access cannot retroactively alter or remove evidence of access attempts — the Fabric ledger records each VAE decision independently.
 
 ---
 
