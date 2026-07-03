@@ -364,6 +364,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   scatterPoints: ScatterPoint[] = [];
 
   private intervalId: ReturnType<typeof setInterval> | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly IDLE_MS = 10 * 60 * 1000;
   private readonly API = '/api/dashboard';
 
   // Track how many of the 4 calls have completed so we build scatter once
@@ -377,16 +379,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private sessionStore: SessionStore
   ) {}
 
+  private readonly activityEvents = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
+  private boundResetIdle = () => this.resetIdleTimer();
+
   ngOnInit(): void {
     this.loadAll();
-    // Refresh every 15 seconds — runs inside Angular zone
     this.zone.runOutsideAngular(() => {
       this.intervalId = setInterval(() => this.zone.run(() => this.loadAll()), 15000);
+      this.activityEvents.forEach(e => document.addEventListener(e, this.boundResetIdle, { passive: true }));
     });
+    this.resetIdleTimer();
   }
 
   ngOnDestroy(): void {
     if (this.intervalId !== null) clearInterval(this.intervalId);
+    if (this.idleTimer !== null) clearTimeout(this.idleTimer);
+    this.activityEvents.forEach(e => document.removeEventListener(e, this.boundResetIdle));
+  }
+
+  private resetIdleTimer(): void {
+    if (this.idleTimer !== null) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => this.zone.run(() => this.logout()), this.IDLE_MS);
   }
 
   logout(): void {
