@@ -20,7 +20,7 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/debug/**").permitAll()
-                        .requestMatchers("/api/auth/**", "/api/crypto/public-key").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/crypto/public-key", "/api/dashboard/**").permitAll()
                         .anyRequest().authenticated()
 
                 )
