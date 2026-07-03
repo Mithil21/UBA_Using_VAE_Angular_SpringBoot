@@ -1,5 +1,5 @@
-import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -9,7 +9,7 @@ import { NotificationService } from '../../../core/services/notification.service
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, DecimalPipe],
   template: `
     <div class="auth-shell">
       <div class="auth-card">
@@ -95,6 +95,13 @@ import { NotificationService } from '../../../core/services/notification.service
           Don't have an account? <a (click)="router.navigate(['/register'])">Create one</a>
         </div>
 
+        <div class="session-timer" [class.timer--warn]="timeLeft <= 30">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          Session resets in {{ timeLeft | number:'2.0-0' }}s
+        </div>
+
         <div class="security-badges">
           <div class="badge">
             <svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -114,18 +121,33 @@ import { NotificationService } from '../../../core/services/notification.service
     </div>
   `,
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit, OnDestroy {
   form = { email: '', password: '' };
   loading = false;
   showPassword = false;
+  timeLeft = 180;
+  private timerInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     public router: Router,
     private authService: AuthService,
     private ubaTracker: UbaTrackerService,
     private notify: NotificationService
-  ) {
+  ) {}
+
+  ngOnInit(): void {
     this.ubaTracker.resetPageTimer('login');
+    this.timerInterval = setInterval(() => {
+      this.timeLeft--;
+      if (this.timeLeft <= 0) {
+        this.ubaTracker.resetPageTimer('login');
+        window.location.reload();
+      }
+    }, 1000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.timerInterval) clearInterval(this.timerInterval);
   }
 
   async onSubmit(): Promise<void> {

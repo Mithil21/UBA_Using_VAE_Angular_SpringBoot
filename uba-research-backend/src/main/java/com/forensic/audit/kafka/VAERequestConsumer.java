@@ -3,6 +3,8 @@ package com.forensic.audit.kafka;
 import com.forensic.audit.analysis.VAEAnalysis;
 import com.forensic.audit.analysis.VAEAnalysis.Decision;
 import com.forensic.audit.email.EmailService;
+import com.forensic.audit.fabric.FabricHashService;
+import com.forensic.audit.fabric.FabricService;
 import com.forensic.audit.uba.*;
 import com.forensic.audit.user.User;
 import com.forensic.audit.user.repository.UserRepository;
@@ -27,6 +29,8 @@ public class VAERequestConsumer {
     private final UbaRejectedRepository     rejectedRepository;
     private final EmailService              emailService;
     private final KafkaTemplate<String, VAEAnalysisMessage> kafkaTemplate;
+    private final FabricService fabricService;
+    private final FabricHashService hashService;
 
     @KafkaListener(
             topics           = KafkaConfig.TOPIC_NAME,
@@ -133,6 +137,25 @@ public class VAERequestConsumer {
             request.markAccepted(result.reconstructionError(), result.normalProbability());
             requestRepository.save(request);
 
+//            adding Fabric
+            // Commit to Fabric ledger
+            String hash = hashService.hashAccepted(accepted);
+            boolean committed = fabricService.commitRecord(
+                    accepted.getRecordId(),
+                    email,
+                    "ACCEPTED",
+                    hash,
+                    result.normalProbability(),
+                    result.reconstructionError(),
+                    snapshot.getIpAddress()
+            );
+            if (committed) {
+                accepted.setFabricHash(hash);
+                accepted.setFabricCommittedAt(java.time.LocalDateTime.now());
+                acceptedRepository.save(accepted);
+                log.info("[Fabric] Hash committed for recordId={}", accepted.getRecordId());
+            }
+
             String username = email.split("@")[0];
             emailService.sendWelcomeEmail(email, username);
             log.info("[Consumer] ACCEPTED — user saved, welcome email sent email={}", email);
@@ -166,6 +189,22 @@ public class VAERequestConsumer {
         request.setMessage("Registration under review");
         requestRepository.save(request);
 
+        String hash = hashService.hashReview(review);
+        boolean committed = fabricService.commitRecord(
+                review.getRecordId(),
+                email,
+                "REVIEW",
+                hash,
+                result.normalProbability(),
+                result.reconstructionError(),
+                snapshot.getIpAddress()
+        );
+        if (committed) {
+            review.setFabricHash(hash);
+            review.setFabricCommittedAt(java.time.LocalDateTime.now());
+            reviewRepository.save(review);
+        }
+
         // On-hold email — different from rejection and system error
         emailService.sendOnHoldEmail(email);
         log.info("[Consumer] REVIEW — saved to uba_review, on-hold email sent email={}", email);
@@ -184,6 +223,22 @@ public class VAERequestConsumer {
 
         request.markRejected(result.reconstructionError(), result.normalProbability());
         requestRepository.save(request);
+
+        String hash = hashService.hashRejected(rejected);
+        boolean committed = fabricService.commitRecord(
+                rejected.getRecordId(),
+                email,
+                "REJECTED",
+                hash,
+                result.normalProbability(),
+                result.reconstructionError(),
+                snapshot.getIpAddress()
+        );
+        if (committed) {
+            rejected.setFabricHash(hash);
+            rejected.setFabricCommittedAt(java.time.LocalDateTime.now());
+            rejectedRepository.save(rejected);
+        }
 
         // Deliberately vague — never tell attacker why they were rejected
         emailService.sendRejectionEmail(email);

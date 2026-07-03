@@ -396,3 +396,23 @@ body::after {
 .strength-bar span.weak   { background: var(--danger); }
 .strength-bar span.medium { background: #fbbf24; }
 .strength-bar span.strong { background: var(--success); }
+
+/* ── Session countdown timer ── */
+.session-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #64748b;
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 16px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+}
+.session-timer.timer--warn {
+  color: #f87171;
+  border-color: rgba(248,113,113,0.25);
+  background: rgba(248,113,113,0.06);
+}
