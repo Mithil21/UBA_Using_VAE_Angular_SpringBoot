@@ -2,6 +2,7 @@ package com.forensic.audit.fabric;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.forensic.audit.email.EmailService;
 import com.forensic.audit.uba.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,12 +27,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TamperDetectionScheduler {
 
+
+    private static final String adminEmail = "mithilbaria98@gmail.com";
+
     private final FabricService      fabricService;
     private final FabricHashService  hashService;
     private final UbaAcceptedRepository acceptedRepo;
     private final UbaReviewRepository   reviewRepo;
     private final UbaRejectedRepository rejectedRepo;
     private final ObjectMapper          objectMapper;
+    private final EmailService emailService;
 
     // ── Scheduled verification ─────────────────────────────────────────────
 
@@ -107,7 +112,6 @@ public class TamperDetectionScheduler {
     private VerificationResult verify(String recordId,
                                       String storedFabricHash,
                                       String currentDbHash) {
-        // Query Fabric ledger for the original hash
         String ledgerJson = fabricService.verifyRecord(recordId);
 
         if (ledgerJson == null) {
@@ -120,20 +124,26 @@ public class TamperDetectionScheduler {
             String ledgerHash = ledgerRecord.get("combinedHash").asText();
 
             if (!ledgerHash.equals(storedFabricHash)) {
-                // The hash stored in DB fabricHash column doesn't match ledger
-                // This means the fabricHash column itself was tampered with
                 log.error("[TamperDetection] TAMPER ALERT — fabricHash column modified! " +
                                 "recordId={} dbFabricHash={} ledgerHash={}",
                         recordId, storedFabricHash, ledgerHash);
+
+                // Send alert email
+                emailService.sendTamperAlertEmail(
+                        adminEmail, recordId, storedFabricHash, ledgerHash);
+
                 return VerificationResult.TAMPERED;
             }
 
             if (!currentDbHash.equals(ledgerHash)) {
-                // The current DB row hashes differently from what was committed
-                // This means the DB row content was modified after Fabric commit
                 log.error("[TamperDetection] TAMPER ALERT — DB row modified after commit! " +
                                 "recordId={} currentHash={} ledgerHash={}",
                         recordId, currentDbHash, ledgerHash);
+
+                // Send alert email
+                emailService.sendTamperAlertEmail(
+                        adminEmail, recordId, currentDbHash, ledgerHash);
+
                 return VerificationResult.TAMPERED;
             }
 
@@ -141,7 +151,8 @@ public class TamperDetectionScheduler {
             return VerificationResult.OK;
 
         } catch (Exception e) {
-            log.error("[TamperDetection] Error verifying recordId={}: {}", recordId, e.getMessage());
+            log.error("[TamperDetection] Error verifying recordId={}: {}",
+                    recordId, e.getMessage());
             return VerificationResult.ERROR;
         }
     }

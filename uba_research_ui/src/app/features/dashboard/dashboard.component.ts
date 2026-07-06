@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angula
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { of } from 'rxjs';
+import { Subscription, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { SessionStore } from '../../core/services/session-store.service';
 
@@ -363,9 +363,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   retryRows:     any[]          = [];
   scatterPoints: ScatterPoint[] = [];
 
-  private intervalId: ReturnType<typeof setInterval> | null = null;
-  private idleTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly IDLE_MS = 10 * 60 * 1000;
+  private sub = new Subscription();
   private readonly API = '/api/dashboard';
 
   // Track how many of the 4 calls have completed so we build scatter once
@@ -379,31 +377,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private sessionStore: SessionStore
   ) {}
 
-  private readonly activityEvents = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
-  private boundResetIdle = () => this.resetIdleTimer();
-
   ngOnInit(): void {
     this.loadAll();
-    this.zone.runOutsideAngular(() => {
-      this.intervalId = setInterval(() => this.zone.run(() => this.loadAll()), 15000);
-      this.activityEvents.forEach(e => document.addEventListener(e, this.boundResetIdle, { passive: true }));
-    });
-    this.resetIdleTimer();
+    // Refresh every 15 seconds — runs inside Angular zone
+    this.sub.add(
+      this.zone.runOutsideAngular(() =>
+        setInterval(() => this.zone.run(() => this.loadAll()), 15000)
+      ) as any
+    );
   }
 
   ngOnDestroy(): void {
-    if (this.intervalId !== null) clearInterval(this.intervalId);
-    if (this.idleTimer !== null) clearTimeout(this.idleTimer);
-    this.activityEvents.forEach(e => document.removeEventListener(e, this.boundResetIdle));
-  }
-
-  private resetIdleTimer(): void {
-    if (this.idleTimer !== null) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.zone.run(() => this.logout()), this.IDLE_MS);
+    this.sub.unsubscribe();
   }
 
   logout(): void {
-  this.sessionStore.snapshot = null; // clear session
+  this.sessionStore.snapshot = null; 
   this.router.navigate(['/login']);
 }
 

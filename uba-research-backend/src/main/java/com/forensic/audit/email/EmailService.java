@@ -273,4 +273,88 @@ public class EmailService {
             </html>
             """;
     }
+
+
+    @Async
+    public void sendTamperAlertEmail(String adminEmail, String recordId,
+                                     String currentHash, String ledgerHash) {
+        send(adminEmail,
+                "🚨 ZeroTrust Forensics — TAMPER ALERT DETECTED",
+                buildTamperAlertHtml(recordId, currentHash, ledgerHash));
+    }
+
+    private String buildTamperAlertHtml(String recordId,
+                                        String currentHash,
+                                        String ledgerHash) {
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8"/>
+          <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; background:#0f172a; margin:0; padding:0; }
+            .wrapper { max-width:560px; margin:40px auto; background:#1e293b; border-radius:12px; overflow:hidden; }
+            .header { background:linear-gradient(135deg,#dc2626,#991b1b); padding:36px 32px; text-align:center; }
+            .header h1 { color:#fff; margin:0; font-size:22px; font-weight:700; }
+            .header p { color:rgba(255,255,255,0.85); margin:6px 0 0; font-size:13px; }
+            .body { padding:32px; color:#cbd5e1; line-height:1.7; font-size:15px; }
+            .body h2 { color:#f87171; font-size:18px; margin-top:0; }
+            .badge { display:inline-block; background:#4c1d1d; color:#f87171; border-radius:6px;
+                     padding:4px 10px; font-size:12px; font-weight:600; margin-bottom:20px; }
+            .hash-box { background:#0f172a; border-radius:8px; padding:16px;
+                        font-family:monospace; font-size:11px; color:#94a3b8;
+                        margin:12px 0; word-break:break-all; }
+            .hash-box .label { color:#64748b; font-size:10px; margin-bottom:4px; }
+            .hash-box .value { color:#f87171; }
+            .hash-box .value--ledger { color:#34d399; }
+            .footer { padding:20px 32px; text-align:center; color:#475569; font-size:12px;
+                      border-top:1px solid #334155; }
+          </style>
+        </head>
+        <body>
+          <div class="wrapper">
+            <div class="header">
+              <h1>⚠ Tamper Alert</h1>
+              <p>ZeroTrust Forensics — Blockchain Audit System</p>
+            </div>
+            <div class="body">
+              <span class="badge">🚨 CRITICAL — Immediate Action Required</span>
+              <h2>Database record has been tampered with</h2>
+              <p>The ZeroTrust Forensics tamper detection system has identified a hash mismatch
+                 between the current database record and the immutable Hyperledger Fabric ledger entry.
+                 This indicates that a database record was modified after it was committed to the blockchain.</p>
+
+              <div class="hash-box">
+                <div class="label">RECORD ID</div>
+                <div class="value">%s</div>
+              </div>
+              <div class="hash-box">
+                <div class="label">CURRENT DATABASE HASH (modified)</div>
+                <div class="value">%s</div>
+              </div>
+              <div class="hash-box">
+                <div class="label">ORIGINAL FABRIC LEDGER HASH (immutable)</div>
+                <div class="value value--ledger">%s</div>
+              </div>
+
+              <p>Immediate actions recommended:</p>
+              <ol style="color:#94a3b8; padding-left:20px;">
+                <li>Identify who made the database modification (check PostgreSQL audit logs)</li>
+                <li>Determine what was changed by comparing the two hashes</li>
+                <li>Restore the original record from the Fabric ledger if possible</li>
+                <li>Review all records committed around the same time</li>
+              </ol>
+              <p style="color:#64748b; font-size:13px;">
+                The Fabric ledger entry remains intact and serves as the authoritative record.
+              </p>
+            </div>
+            <div class="footer">
+              ZeroTrust Forensics · Blockchain Audit System<br/>
+              This is an automated security alert — do not reply.
+            </div>
+          </div>
+        </body>
+        </html>
+        """.formatted(recordId, currentHash, ledgerHash);
+    }
 }
