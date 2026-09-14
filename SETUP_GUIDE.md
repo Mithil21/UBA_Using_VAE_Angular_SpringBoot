@@ -1,205 +1,204 @@
-# UBA Research System - Setup & Testing Guide
+# UBA-VAE — Hyperledger Fabric Peer Lifecycle Guide
 
-## 🚀 Quick Start
+This file exists to hold one specific piece of detail: the complete chaincode
+install/approve/commit sequence for the `auditcontract` chaincode, which the
+main [README.md](./README.md) (Step 4, "Hyperledger Fabric") intentionally
+summarised and pointed here for.
 
-### 1. Automated Setup (Recommended)
-```bash
-# Run the automated setup script
-start_uba_system.bat
-```
+**Everything else — prerequisites, PostgreSQL setup, training the VAE, running
+the five services, testing bot detection, the dashboard — lives in
+[README.md](./README.md).** This file only covers the Fabric chaincode
+lifecycle, since that part has enough moving pieces (two organisations, a
+package ID that only exists after install, CCAAS server startup ordering) to
+deserve its own walkthrough.
 
-### 2. Manual Setup
-
-#### Prerequisites
-- Node.js 18+
-- Java 17+
-- Python 3.8+
-- Maven 3.6+
-
-#### Step-by-Step Installation
-
-1. **Install Python Dependencies**
-```bash
-cd uba-research-pythonAI
-pip install -r requirements.txt
-```
-
-2. **Start Python AI Server**
-```bash
-python flask_server.py
-```
-Server will start on http://localhost:5000
-
-3. **Start Spring Boot Backend**
-```bash
-cd uba-research-backend
-mvn spring-boot:run
-```
-Backend will start on http://localhost:8080
-
-4. **Start Angular Frontend**
-```bash
-cd uba-research
-npm install
-ng serve
-```
-Frontend will start on http://localhost:4200
-
-## 🧪 Testing the System
-
-### Automated Testing
-```bash
-python test_uba_system.py
-```
-
-### Manual Testing Scenarios
-
-#### 1. Penetration & Intrusion Detection
-- Login with unusual typing patterns
-- Use automated tools to fill forms
-- Expected: System detects suspicious behavior
-
-#### 2. Session Hijacking & Identity Spoofing
-- Login from different devices/locations
-- Use stolen session tokens
-- Expected: Behavioral fingerprinting detects misuse
-
-#### 3. Anomalous API/Service Usage
-- Make rapid API calls
-- Access unusual endpoint combinations
-- Expected: API abuse detection triggers
-
-#### 4. Application Layer Attacks
-- Submit SQL injection payloads: `'; DROP TABLE users; --`
-- Try XSS attacks: `<script>alert('xss')</script>`
-- Expected: Payload analysis detects attacks
-
-#### 5. Account Takeovers (ATO)
-- Login from new locations
-- Change behavioral patterns
-- Expected: Location-based validation fails
-
-#### 6. Data Exfiltration / Leakage
-- Download multiple files rapidly
-- Export large datasets
-- Expected: Download monitoring triggers alerts
-
-#### 7. Insider Threats
-```typescript
-// After login, simulate after-hours access
-securityMonitor.trackInsiderActivity('DATA_EXPORT', 'sensitive_files');
-```
-
-#### 8. Privilege Escalation / Role Abuse
-```typescript
-// Make admin API call as regular user
-http.get('http://localhost:8080/admin/users').subscribe();
-```
-
-#### 9. Phishing & Malware Indicators
-```javascript
-// Simulate automation in browser console
-navigator.webdriver = true;
-// Reload page - access should be blocked
-```
-
-#### 10. Compliance Violations
-```typescript
-// Access personal data without consent
-securityMonitor.trackDataAccess('personal_data', 'unauthorized');
-```
-
-## 🔧 System Architecture
-
-```
-Frontend (Angular) → HTTP Interceptor → Spring Boot Backend → Python AI Models
-     ↓                      ↓                    ↓                    ↓
-User Tracking → Stealth Headers → Security Analysis → Threat Detection
-```
-
-## 📊 Monitoring & Alerts
-
-- **Browser Console**: Real-time threat detection logs
-- **Spring Logs**: Security analysis results
-- **Network Tab**: Security API calls with stealth headers
-- **Python Output**: AI model predictions
-
-## 🛠️ Key Fixes Applied
-
-1. **Fixed Input Stream Consumption**: AnomalyDetectionInterceptor now uses cached request body
-2. **Added Missing Flask Server**: Created flask_server.py with all required endpoints
-3. **Fixed Encryption Key Mismatch**: Frontend and backend now use same encryption key
-4. **Added Error Handling**: All services now handle errors gracefully
-5. **Fixed API Endpoints**: Corrected endpoint URLs and response formats
-6. **Added Filter Registration**: StealthHeaderFilter properly registered
-7. **Enhanced Testing**: Comprehensive test suite for all scenarios
-
-## 🚨 Security Features
-
-- **Stealth Monitoring**: Behavioral data hidden in HTTP headers
-- **AI-Powered Detection**: Machine learning threat analysis
-- **Real-time Blocking**: Immediate threat response
-- **Comprehensive Logging**: Full audit trail
-- **Multi-layer Protection**: Frontend + Backend + AI
-
-## 📈 Performance Metrics
-
-- **Real-time Detection**: <100ms response time
-- **AI Processing**: <500ms for threat analysis
-- **Memory Usage**: <50MB additional overhead
-- **Network Impact**: Minimal with compressed headers
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-1. **Python AI Server Not Starting**
-   - Check Python version (3.8+)
-   - Install missing dependencies: `pip install -r requirements.txt`
-
-2. **Backend Connection Errors**
-   - Ensure Java 17+ is installed
-   - Check if port 8080 is available
-
-3. **Frontend Build Errors**
-   - Update Node.js to 18+
-   - Clear npm cache: `npm cache clean --force`
-
-4. **CORS Issues**
-   - Verify backend CORS configuration
-   - Check frontend proxy configuration
-
-### Debug Commands
-
-```bash
-# Check service status
-curl http://localhost:5000/health
-curl http://localhost:8080/api/auth/health
-
-# Test Python AI directly
-curl -X POST http://localhost:5000/detect -H "Content-Type: application/json" -d '{"body":"test","metadata":{}}'
-
-# View backend logs
-tail -f uba-research-backend/logs/application.log
-```
-
-## 📝 Next Steps
-
-1. Run the automated test suite
-2. Test individual security scenarios
-3. Monitor system performance
-4. Review security logs
-5. Customize threat detection thresholds
-
-## 🎯 Success Criteria
-
-✅ All services start without errors
-✅ Python AI endpoints respond correctly
-✅ Backend processes stealth headers
-✅ Frontend sends encrypted metadata
-✅ All 10 security scenarios detect threats
-✅ System performance meets requirements
+Run everything below from `~/fabric-samples/test-network`, after
+`./network.sh up createChannel -c auditchannel -s couchdb` has already
+succeeded and the `auditcontract-ccaas.tar.gz` package has already been built
+(both covered in the README).
 
 ---
 
-**Note**: This system is designed for research and demonstration purposes. For production use, additional security hardening and compliance measures should be implemented.
+## 1. Install the chaincode package on Org1
+
+```bash
+cd ~/fabric-samples/test-network
+
+export CORE_PEER_TLS_ENABLED=true
+export CORE_PEER_LOCALMSPID="Org1MSP"
+export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=localhost:7051
+
+peer lifecycle chaincode install ~/fabric-samples/audit-chaincode/auditcontract-ccaas.tar.gz
+```
+
+## 2. Get the package ID
+
+The install step above does not print a usable variable directly — query for it:
+
+```bash
+peer lifecycle chaincode queryinstalled
+```
+
+This prints something like:
+
+```
+Installed chaincodes on peer:
+Package ID: auditcontract_1.0:9b8f2c4a1e7d..., Label: auditcontract_1.0
+```
+
+Copy the full `Package ID` value (everything after `Package ID: `, including
+the hash after the colon) and export it:
+
+```bash
+export PACKAGE_ID=auditcontract_1.0:9b8f2c4a1e7d...   # use your actual value
+```
+
+## 3. Start the CCAAS chaincode server now, before approving
+
+This is the step that's easy to get in the wrong order. The peers will try to
+reach the chaincode server as soon as a transaction needs it — approving and
+committing don't strictly require it running yet, but querying or invoking
+afterwards will hang or fail if it isn't. Start it now, in its own terminal,
+so it's already listening by the time you test anything:
+
+```bash
+cd ~/fabric-samples/audit-chaincode
+
+CHAINCODE_SERVER_ADDRESS=0.0.0.0:9999 \
+CORE_CHAINCODE_ID_NAME=$PACKAGE_ID \
+./auditcontract-server
+```
+
+Leave this running. Go back to a separate terminal (with the Org1 environment
+variables from Step 1 still exported) for the rest of this guide.
+
+## 4. Approve the chaincode definition for Org1
+
+```bash
+export ORDERER_CA=${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
+
+peer lifecycle chaincode approveformyorg -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls --cafile "$ORDERER_CA" \
+  --channelID auditchannel --name auditcontract --version 1.0 \
+  --package-id $PACKAGE_ID --sequence 1
+```
+
+## 5. Repeat install + approve for Org2
+
+Switch the environment variables to Org2, then repeat the same install and
+approve commands with Org2's context:
+
+```bash
+export CORE_PEER_LOCALMSPID="Org2MSP"
+export CORE_PEER_TLS_ROOTCERT_FILE=${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt
+export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
+export CORE_PEER_ADDRESS=localhost:9051
+
+peer lifecycle chaincode install ~/fabric-samples/audit-chaincode/auditcontract-ccaas.tar.gz
+# Package ID will be identical to Org1's, since it's the same .tar.gz
+
+peer lifecycle chaincode approveformyorg -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls --cafile "$ORDERER_CA" \
+  --channelID auditchannel --name auditcontract --version 1.0 \
+  --package-id $PACKAGE_ID --sequence 1
+```
+
+Both organisations need to approve independently — this is what "two
+organisations must endorse every transaction" (described in the README's
+architecture section) actually looks like at setup time, not just at
+transaction time.
+
+## 6. Check commit readiness
+
+```bash
+peer lifecycle chaincode checkcommitreadiness \
+  --channelID auditchannel --name auditcontract --version 1.0 --sequence 1 \
+  --tls --cafile "$ORDERER_CA" --output json
+```
+
+Expect both `Org1MSP` and `Org2MSP` to show `true`. If either shows `false`,
+that organisation's approval in Step 4/5 didn't go through — redo it before
+continuing.
+
+## 7. Commit the chaincode definition to the channel
+
+This step needs both organisations' peer addresses and TLS certs at once,
+regardless of which org's environment variables are currently active:
+
+```bash
+peer lifecycle chaincode commit -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls --cafile "$ORDERER_CA" \
+  --channelID auditchannel --name auditcontract --version 1.0 --sequence 1 \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt
+```
+
+## 8. Verify it committed
+
+```bash
+peer lifecycle chaincode querycommitted --channelID auditchannel --name auditcontract
+```
+
+## 9. Sanity-check the chaincode directly (optional, but worth doing once)
+
+Before starting the Spring Boot backend, confirm the chaincode itself works,
+independent of the Java application. Using the signature documented in the
+main README (`CommitRecord(uuid, email, decision, hash, vaeScore, mseScore)`
+and `VerifyRecord(uuid)`):
+
+```bash
+peer chaincode invoke -o localhost:7050 \
+  --ordererTLSHostnameOverride orderer.example.com \
+  --tls --cafile "$ORDERER_CA" \
+  -C auditchannel -n auditcontract \
+  --peerAddresses localhost:7051 \
+  --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt \
+  --peerAddresses localhost:9051 \
+  --tlsRootCertFiles ${PWD}/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt \
+  -c '{"function":"CommitRecord","Args":["test-uuid-001","test@example.com","ACCEPTED","dummyhash123","0.95","1.2"]}'
+
+peer chaincode query -C auditchannel -n auditcontract \
+  -c '{"function":"VerifyRecord","Args":["test-uuid-001"]}'
+```
+
+The query should return the hash you just committed. If this works, the
+ledger side is solid — any Fabric-related issue after this point is in the
+Spring Boot `FabricService`/`FabricGatewayConfig` connection layer, not the
+chaincode itself.
+
+> **Note:** double-check the argument names, order, and types above against
+> your actual `audit_contract.go` if you've changed the function signature
+> since writing this guide — this reflects what's documented in the README,
+> not a live read of the chaincode source.
+
+---
+
+## Troubleshooting this part specifically
+
+**`checkcommitreadiness` shows `false` for one org** — that org's
+`approveformyorg` (Step 4 or 5) either didn't run or targeted the wrong peer.
+Re-export that org's environment variables and re-run the approve command.
+
+**`commit` fails with an endorsement error** — almost always means the CCAAS
+server (Step 3) isn't running, or `CORE_CHAINCODE_ID_NAME` doesn't exactly
+match the `Package ID` from Step 2 (it must include everything after
+`Package ID: `, not just the label).
+
+**Peer commands hang with no output** — check the CCAAS server terminal for a
+connection attempt; if there's nothing, the peer likely can't reach
+`host.docker.internal:9999` from inside its container. Confirm the
+`connection.json` inside the `.tar.gz` package (built in the README's Step 4)
+actually points at `host.docker.internal:9999` and that Docker Desktop's
+`vm.docker.internal` resolution is enabled.
+
+**Re-running after a mistake** — if you need to redo an approval, you cannot
+reuse `--sequence 1` for the same chaincode name once it's already been
+approved by both orgs with that sequence; increment `--sequence` (2, 3, ...)
+consistently across every command above and repeat from Step 4.
